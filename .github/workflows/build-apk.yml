@@ -3,7 +3,7 @@ name: Compilar APK
 on: [push, workflow_dispatch]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   apk:
@@ -32,3 +32,11 @@ jobs:
         with:
           name: ScalaAmbient-apk
           path: ScalaAmbient.apk
+
+      - name: Publicar en Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ github.run_number }}
+          name: Scala Ambient ${{ github.run_number }}
+          body: "APK lista para instalar en el móvil."
+          files: ScalaAmbient.apk
