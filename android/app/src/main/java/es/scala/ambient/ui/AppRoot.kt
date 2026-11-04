@@ -44,6 +44,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
@@ -88,16 +91,32 @@ fun AppRoot() {
 
     ScaledUi(settings.uiScale) {
         Box(Modifier.fillMaxSize().background(Ground)) {
-            val blurOk = Build.VERSION.SDK_INT >= 31
+            // Reflejo de la luz: degradados suaves a pantalla completa (sin bordes ni recortes)
             Box(
-                Modifier.offset(220.dp, (-40).dp).size(460.dp).alpha(0.14f * glow)
-                    .then(if (blurOk) Modifier.blur(120.dp) else Modifier.alpha(0.5f))
-                    .background(dashColor, CircleShape)
-            )
-            Box(
-                Modifier.align(Alignment.BottomEnd).offset(90.dp, 80.dp).size(460.dp).alpha(0.22f * glow)
-                    .then(if (blurOk) Modifier.blur(130.dp) else Modifier.alpha(0.5f))
-                    .background(doorColor, CircleShape)
+                Modifier.fillMaxSize().drawBehind {
+                    if (glow <= 0f) return@drawBehind
+                    val big = size.maxDimension
+                    // salpicadero: arriba, hacia el centro
+                    drawRect(
+                        Brush.radialGradient(
+                            0f to dashColor.copy(alpha = 0.16f * glow),
+                            0.5f to dashColor.copy(alpha = 0.05f * glow),
+                            1f to Color.Transparent,
+                            center = Offset(size.width * 0.42f, -size.height * 0.15f),
+                            radius = big * 0.75f,
+                        )
+                    )
+                    // puertas: abajo a la derecha
+                    drawRect(
+                        Brush.radialGradient(
+                            0f to doorColor.copy(alpha = 0.24f * glow),
+                            0.5f to doorColor.copy(alpha = 0.08f * glow),
+                            1f to Color.Transparent,
+                            center = Offset(size.width * 1.0f, size.height * 1.05f),
+                            radius = big * 0.8f,
+                        )
+                    )
+                }
             )
 
             BoxWithConstraints(Modifier.fillMaxSize().systemBarsPadding().padding(16.dp)) {

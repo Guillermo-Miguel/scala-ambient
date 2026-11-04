@@ -69,7 +69,7 @@ fun MusicScreen(wide: Boolean) {
         if (art != null && Build.VERSION.SDK_INT >= 31) {
             val img = remember(art) { art.asImageBitmap() }
             Crossfade(img, animationSpec = tween(600), label = "bg") { bmp ->
-                Image(bmp, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().blur(90.dp).alpha(0.35f))
+                Image(bmp, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().blur(90.dp, androidx.compose.ui.draw.BlurredEdgeTreatment.Unbounded).alpha(0.35f))
             }
         }
 
