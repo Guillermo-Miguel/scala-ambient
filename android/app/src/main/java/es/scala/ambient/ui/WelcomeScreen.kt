@@ -109,17 +109,18 @@ fun WelcomeScreen(onDone: () -> Unit) {
             }
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClickLabel = "Saltar") { onDone() },
     ) {
-        val logoW = (maxWidth * 0.46f).coerceAtMost(560.dp)
+        val fullW = maxWidth
+        val logoW = (fullW * 0.46f).coerceAtMost(560.dp)
         val logoH = logoW * (148f / 1008f)
 
         Column(
             Modifier.align(Alignment.Center),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Box(Modifier.width(maxWidth).height(logoH + 40.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.width(fullW).height(logoH + 40.dp), contentAlignment = Alignment.Center) {
                 // la línea de luz
                 Box(
-                    Modifier.width(maxWidth * 0.9f * line.value).height(2.dp)
+                    Modifier.width(fullW * 0.9f * line.value).height(2.dp)
                         .graphicsLayer { alpha = lineOut.value * (line.value * 6f).coerceAtMost(1f) }
                         .drawBehind {
                             drawRect(Brush.horizontalGradient(listOf(Color.Transparent, Ink, Color.Transparent)))
