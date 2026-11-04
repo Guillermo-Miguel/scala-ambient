@@ -126,7 +126,7 @@ fun SettingsScreen(wide: Boolean, onReplayWelcome: () -> Unit) {
             }
 
             Section("Navegación") {
-                Label("Abrir la ruta en")
+                Label("Navegador")
                 Segmented(NavApp.entries.map { it.label }, s.navApp.ordinal, Modifier.fillMaxWidth()) { i ->
                     app.prefs.update { it.copy(navApp = NavApp.entries[i]) }
                 }

@@ -16,7 +16,12 @@ import java.net.URLEncoder
 import java.util.Locale
 
 /** Ruta calculada: puntos para dibujarla, distancia y duración. */
-data class Route(val points: List<Pair<Double, Double>>, val meters: Double, val seconds: Double)
+data class Route(
+    val points: List<Pair<Double, Double>>,
+    val meters: Double,
+    val seconds: Double,
+    val steps: List<Step> = emptyList(),
+)
 
 fun weatherLabel(code: Int): String = when (code) {
     0 -> "Despejado"
@@ -105,19 +110,47 @@ object Net {
         }
     }
 
-    suspend fun route(from: Pair<Double, Double>, to: Pair<Double, Double>): Route {
+    /**
+     * Ruta en coche con sus maniobras. `heading` (grados) ayuda a no mandarte en sentido contrario
+     * al recalcular en marcha.
+     */
+    suspend fun route(from: Pair<Double, Double>, to: Pair<Double, Double>, heading: Float? = null): Route {
+        val bearings = heading?.let { "&bearings=${it.toInt()},60;" } ?: ""
         val url = String.format(
             Locale.US,
-            "https://router.project-osrm.org/route/v1/driving/%.6f,%.6f;%.6f,%.6f?overview=full&geometries=geojson",
+            "https://router.project-osrm.org/route/v1/driving/%.6f,%.6f;%.6f,%.6f?overview=full&geometries=geojson&steps=true&alternatives=false",
             from.second, from.first, to.second, to.first,
-        )
+        ) + bearings
         val r = JSONObject(get(url)).getJSONArray("routes").getJSONObject(0)
         val coords = r.getJSONObject("geometry").getJSONArray("coordinates")
         val pts = (0 until coords.length()).map { i ->
             val c = coords.getJSONArray(i)
             c.getDouble(1) to c.getDouble(0)
         }
-        return Route(pts, r.getDouble("distance"), r.getDouble("duration"))
+        val steps = ArrayList<Step>()
+        val legs = r.getJSONArray("legs")
+        for (l in 0 until legs.length()) {
+            val ss = legs.getJSONObject(l).getJSONArray("steps")
+            for (i in 0 until ss.length()) {
+                val st = ss.getJSONObject(i)
+                val m = st.getJSONObject("maneuver")
+                val loc = m.getJSONArray("location")
+                steps += Step(
+                    type = m.optString("type"),
+                    modifier = m.optString("modifier").ifBlank { null },
+                    name = st.optString("name"),
+                    ref = st.optString("ref").ifBlank { null },
+                    destinations = st.optString("destinations").ifBlank { null },
+                    exit = if (m.has("exit")) m.optInt("exit") else null,
+                    distance = st.optDouble("distance", 0.0),
+                    duration = st.optDouble("duration", 0.0),
+                    lat = loc.getDouble(1),
+                    lon = loc.getDouble(0),
+                    bearingAfter = m.optInt("bearing_after"),
+                )
+            }
+        }
+        return Route(pts, r.getDouble("distance"), r.getDouble("duration"), steps)
     }
 
     suspend fun weather(lat: Double, lon: Double): Weather {
@@ -179,6 +212,7 @@ object Net {
     /** Abre la navegación paso a paso en la app elegida (en el coche sale en Android Auto). */
     fun startNavigation(context: Context, app: NavApp, lat: Double, lon: Double) {
         val intent = when (app) {
+            NavApp.INTERNAL -> return
             NavApp.GOOGLE_MAPS -> Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=$lat,$lon&mode=d"))
                 .setPackage("com.google.android.apps.maps")
             NavApp.WAZE -> Intent(Intent.ACTION_VIEW, Uri.parse("https://waze.com/ul?ll=$lat,$lon&navigate=yes"))

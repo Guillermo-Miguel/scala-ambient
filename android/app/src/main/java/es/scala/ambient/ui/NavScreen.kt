@@ -55,7 +55,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import es.scala.ambient.AmbientApp
 import es.scala.ambient.Place
+import es.scala.ambient.NavApp
 import es.scala.ambient.nav.NavModel
+import es.scala.ambient.nav.NavSession
+import es.scala.ambient.nav.NavState
+import es.scala.ambient.nav.Route
 import es.scala.ambient.nav.Net
 import es.scala.ambient.nav.formatDistance
 import es.scala.ambient.nav.formatDuration
@@ -66,6 +70,10 @@ import java.util.Calendar
 
 @Composable
 fun NavScreen(wide: Boolean) {
+    // guiando: pantalla de navegación paso a paso
+    val guiding by NavSession.state.collectAsState()
+    guiding?.let { NavigatingView(wide, it); return }
+
     val app = AmbientApp.instance
     val context = LocalContext.current
     val focus = LocalFocusManager.current
@@ -217,8 +225,14 @@ fun NavScreen(wide: Boolean) {
                         err != null -> Text(err ?: "", color = RedText, fontSize = 15.sp)
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        PillButton("Iniciar en ${settings.navApp.label}", primary = true, icon = Icons.Nav, modifier = Modifier.weight(1f)) {
-                            Net.startNavigation(context, settings.navApp, d.lat, d.lon)
+                        val internal = settings.navApp == NavApp.INTERNAL
+                        PillButton(
+                            if (internal) "Iniciar navegación" else "Iniciar en ${settings.navApp.label}",
+                            primary = true, icon = Icons.Nav, modifier = Modifier.weight(1f),
+                            enabled = !internal || (r != null && !busy),
+                        ) {
+                            if (internal) r?.let { NavSession.start(context, d, it) }
+                            else Net.startNavigation(context, settings.navApp, d.lat, d.lon)
                         }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -255,5 +269,50 @@ private fun Stat(value: String, label: String) {
     Column {
         Text(value, color = Ink, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
         Text(label, color = Quiet, fontSize = 12.sp)
+    }
+}
+
+/** Navegación paso a paso: mapa que sigue al coche, maniobra arriba, datos y mandos abajo. */
+@Composable
+private fun NavigatingView(wide: Boolean, st: NavState) {
+    val context = LocalContext.current
+    val view = androidx.compose.ui.platform.LocalView.current
+    var follow by remember { mutableStateOf(true) }
+    var recenter by remember { mutableIntStateOf(0) }
+
+    // pantalla siempre encendida mientras guía
+    androidx.compose.runtime.DisposableEffect(Unit) {
+        view.keepScreenOn = true
+        onDispose { view.keepScreenOn = false }
+    }
+    // si mueves el mapa, a los 12 s vuelve a seguir al coche
+    LaunchedEffect(follow) { if (!follow) { delay(12_000); follow = true } }
+
+    val zoom = when {
+        st.speedKmh < 30 -> 17.6
+        st.speedKmh < 70 -> 16.8
+        else -> 15.8
+    } + if (st.distToStep < 200 && st.speedKmh < 70) 0.4 else 0.0
+
+    Box(Modifier.fillMaxSize().clip(RoundedCornerShape(30.dp)).background(Color(0xFF0B0B0C))) {
+        OsmMap(
+            MapScene(
+                destination = st.destination,
+                route = Route(st.remainingPoints, st.remainingM, st.remainingS),
+                recenter = recenter,
+                nav = es.scala.ambient.ui.NavCamera(st.lat, st.lon, st.bearing, zoom, follow),
+                onUserPan = { follow = false },
+            ),
+            interactive = true,
+            modifier = Modifier.fillMaxSize(),
+        )
+        if (follow) VehicleArrow(Modifier.align(Alignment.Center))
+        GuidanceOverlay(
+            st = st, wide = wide, follow = follow,
+            onRecenter = { follow = true },
+            onOverview = { follow = false; recenter++ },
+            onStop = { NavSession.stop(context) },
+            onMute = { NavSession.toggleMute() },
+        )
     }
 }

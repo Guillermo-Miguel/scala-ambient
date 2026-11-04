@@ -4,6 +4,7 @@ import android.graphics.Color as AColor
 import android.graphics.ColorMatrix
 import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
+import android.view.MotionEvent
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
@@ -24,6 +25,7 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Overlay
 import org.osmdroid.views.overlay.Polyline
 import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
 import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
@@ -55,7 +57,13 @@ data class MapScene(
     val route: Route?,
     val recenter: Int,
     val centerOnMe: Boolean = false,
+    /** Navegando: seguir al coche con el mapa girado en el sentido de la marcha. */
+    val nav: NavCamera? = null,
+    /** El usuario ha movido el mapa con el dedo. */
+    val onUserPan: (() -> Unit)? = null,
 )
+
+data class NavCamera(val lat: Double, val lon: Double, val bearing: Float, val zoom: Double, val follow: Boolean)
 
 /**
  * Última vista de cada mapa (el grande y el de Inicio). Al volver a una pantalla,
@@ -71,6 +79,7 @@ class MapHandle {
     var line: Polyline? = null
     var marker: Marker? = null
     var lastRecenter = -1
+    var onPan: (() -> Unit)? = null
     var restored = false
 }
 
@@ -133,6 +142,13 @@ fun OsmMap(scene: MapScene, interactive: Boolean, modifier: Modifier = Modifier)
                     runOnFirstFix { post { if (!handle.restored && handle.line == null) controller.setCenter(myLocation) } }
                 }
                 overlays.add(me)
+                // detectar cuando mueves el mapa con el dedo (para dejar de seguir al coche)
+                overlays.add(object : Overlay() {
+                    override fun onTouchEvent(event: MotionEvent, mapView: MapView): Boolean {
+                        if (event.action == MotionEvent.ACTION_MOVE) handle.onPan?.invoke()
+                        return false
+                    }
+                })
                 handle.me = me
                 handle.view = this
                 onResume()
@@ -168,6 +184,19 @@ fun OsmMap(scene: MapScene, interactive: Boolean, modifier: Modifier = Modifier)
                 map.overlays.add(mk)
                 handle.marker = mk
             }
+            // navegación: el mapa sigue al coche y gira con él
+            handle.onPan = scene.onUserPan
+            val nav = scene.nav
+            handle.me?.isEnabled = nav == null || !nav.follow
+            if (nav != null && nav.follow) {
+                if (kotlin.math.abs(map.mapOrientation + nav.bearing) > 2f) map.mapOrientation = -nav.bearing
+                map.controller.animateTo(GeoPoint(nav.lat, nav.lon), nav.zoom, 900L)
+                handle.lastRecenter = scene.recenter
+                map.invalidate()
+                return@AndroidView
+            }
+            if (nav == null && map.mapOrientation != 0f) map.mapOrientation = 0f
+
             // encuadre
             if (handle.lastRecenter == -1) {
                 // primera vez: no mover la vista (ya empieza donde toca)

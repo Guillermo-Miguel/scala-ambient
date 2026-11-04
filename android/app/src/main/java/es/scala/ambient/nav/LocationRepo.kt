@@ -27,7 +27,7 @@ class LocationRepo(private val context: Context) {
         override fun onLocationChanged(loc: Location) {
             val cur = _location.value
             // Preferir el GPS; aceptar la red solo si es más reciente o no hay otra
-            if (cur == null || loc.provider == LocationManager.GPS_PROVIDER || loc.time - cur.time > 30_000) {
+            if (cur == null || loc.provider == LocationManager.GPS_PROVIDER || loc.time - cur.time > (if (navigating) 5_000 else 30_000)) {
                 _location.value = loc
             }
         }
@@ -54,7 +54,25 @@ class LocationRepo(private val context: Context) {
         }
     }
 
+    /** Durante la navegación: GPS cada segundo y sin parar al salir de la app. */
+    var navigating = false
+        private set
+
+    fun setNavigating(on: Boolean) {
+        if (navigating == on) return
+        navigating = on
+        if (!hasPermission()) return
+        lm.removeUpdates(listener)
+        running = false
+        if (on) {
+            running = true
+            runCatching { lm.requestLocationUpdates(LocationManager.GPS_PROVIDER, 1_000L, 0f, listener, Looper.getMainLooper()) }
+            runCatching { lm.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 3_000L, 0f, listener, Looper.getMainLooper()) }
+        } else start()
+    }
+
     fun stop() {
+        if (navigating) return          // guiando: el GPS sigue aunque salgas de la app
         if (!running) return
         running = false
         lm.removeUpdates(listener)

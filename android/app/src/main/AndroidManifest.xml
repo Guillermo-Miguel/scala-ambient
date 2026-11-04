@@ -15,6 +15,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- Navegación integrada: seguir guiando con la app en segundo plano -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
     <!-- Teléfono: favoritos y llamar -->
@@ -94,6 +97,11 @@
             </intent-filter>
         </service>
         <receiver android:name=".telecom.CallActionReceiver" android:exported="false" />
+
+        <service
+            android:name=".nav.NavService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
 
         <!-- Lee lo que suena en cualquier app de música (Spotify, YouTube Music…) -->
         <service

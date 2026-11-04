@@ -42,6 +42,12 @@ object NavModel {
         recalc()
     }
 
+    /** Ruta nueva tras recalcular en marcha (el destino no cambia). */
+    fun setRoute(r: Route) {
+        _route.value = r
+        _error.value = null
+    }
+
     fun clear() {
         routeJob?.cancel()
         _destination.value = null

@@ -53,7 +53,11 @@ import androidx.compose.ui.unit.sp
 import es.scala.ambient.AmbientApp
 import es.scala.ambient.Zone
 import es.scala.ambient.media.NowPlaying
+import es.scala.ambient.NavApp
 import es.scala.ambient.nav.NavModel
+import es.scala.ambient.nav.NavSession
+import es.scala.ambient.nav.Route
+import es.scala.ambient.nav.shortDistance
 import es.scala.ambient.nav.Net
 import es.scala.ambient.nav.formatDistance
 import es.scala.ambient.nav.formatDuration
@@ -131,6 +135,36 @@ private fun NavTile(modifier: Modifier, onOpen: (Dest) -> Unit) {
     val busy by NavModel.busy.collectAsState()
     val err by NavModel.error.collectAsState()
     val shape = RoundedCornerShape(30.dp)
+    val guiding by NavSession.state.collectAsState()
+
+    // guiando: la próxima maniobra en grande; toca para ir a la navegación
+    guiding?.let { g ->
+        Box(modifier.clip(shape).background(Color(0xFF0B0B0C)).clickable(role = Role.Button) { onOpen(Dest.NAV) }) {
+            OsmMap(
+                MapScene(g.destination, Route(g.remainingPoints, g.remainingM, g.remainingS), 0, nav = NavCamera(g.lat, g.lon, g.bearing, 16.0, true)),
+                interactive = false, modifier = Modifier.fillMaxSize(),
+            )
+            VehicleArrow(Modifier.align(Alignment.Center))
+            Box(Modifier.fillMaxSize().clickable(role = Role.Button, onClickLabel = "Abrir navegación") { onOpen(Dest.NAV) })
+            Glass(Modifier.align(Alignment.TopStart).fillMaxWidth().padding(12.dp), radius = 22.dp, padding = PaddingValues(14.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    ManeuverIcon(g.step, Modifier.size(46.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(if (g.arrived) "Has llegado" else shortDistance(g.distToStep), color = Ink, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+                        Text(g.step?.text ?: "", color = Quiet, fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+            val eta = Calendar.getInstance().apply { add(Calendar.SECOND, g.remainingS.toInt()) }
+            Glass(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(12.dp), radius = 22.dp, padding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)) {
+                Text(
+                    "Llegada ${two(eta.get(Calendar.HOUR_OF_DAY))}:${two(eta.get(Calendar.MINUTE))} · ${formatDuration(g.remainingS)} · ${formatDistance(g.remainingM)}",
+                    color = Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        return
+    }
 
     Box(modifier.clip(shape).background(Color(0xFF0B0B0C))) {
         OsmMap(MapScene(dest, route, recenter = (route?.points?.size ?: 0) + (dest?.hashCode() ?: 0)), interactive = false, modifier = Modifier.fillMaxSize())
@@ -168,8 +202,10 @@ private fun NavTile(modifier: Modifier, onOpen: (Dest) -> Unit) {
                 when {
                     target == null -> PillButton("Buscar", icon = Icons.Search) { onOpen(Dest.NAV) }
                     dest == null -> PillButton("Ir", primary = true) { NavModel.choose(target) }
-                    else -> PillButton("Iniciar", primary = true) {
-                        Net.startNavigation(context, settings.navApp, target.lat, target.lon)
+                    else -> PillButton("Iniciar", primary = true, enabled = settings.navApp != NavApp.INTERNAL || route != null) {
+                        if (settings.navApp == NavApp.INTERNAL) {
+                            route?.let { NavSession.start(context, target, it); onOpen(Dest.NAV) }
+                        } else Net.startNavigation(context, settings.navApp, target.lat, target.lon)
                     }
                 }
             }
