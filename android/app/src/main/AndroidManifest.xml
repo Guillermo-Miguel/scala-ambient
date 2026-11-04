@@ -30,6 +30,21 @@
     <queries>
         <package android:name="com.google.android.apps.maps" />
         <package android:name="com.waze" />
+        <!-- Apps de música para los accesos directos -->
+        <package android:name="com.google.android.apps.youtube.music" />
+        <package android:name="com.spotify.music" />
+        <package android:name="com.apple.android.music" />
+        <package android:name="com.amazon.mp3" />
+        <package android:name="deezer.android.app" />
+        <package android:name="com.aspiro.tidal" />
+        <package android:name="com.soundcloud.android" />
+        <package android:name="com.google.android.youtube" />
+        <package android:name="com.sec.android.app.music" />
+        <package android:name="com.ivoox.app" />
+        <package android:name="fm.castbox.audiobook.radio.podcast" />
+        <intent>
+            <action android:name="android.media.browse.MediaBrowserService" />
+        </intent>
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="google.navigation" />

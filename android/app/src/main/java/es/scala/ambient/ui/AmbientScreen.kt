@@ -1,15 +1,15 @@
 package es.scala.ambient.ui
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -37,7 +37,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -45,12 +47,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.animation.core.withInfiniteAnimationFrameMillis
 import es.scala.ambient.AmbientApp
 import es.scala.ambient.AmbientState
 import es.scala.ambient.Cmd
@@ -60,6 +64,11 @@ import es.scala.ambient.PALETTE
 import es.scala.ambient.Scene
 import es.scala.ambient.Zone
 import es.scala.ambient.ZoneGroup
+import kotlin.math.cos
+import kotlin.math.exp
+import kotlin.math.max
+import kotlin.math.sin
+import kotlin.math.PI
 
 @Composable
 fun AmbientScreen(wide: Boolean) {
@@ -85,9 +94,9 @@ fun AmbientScreen(wide: Boolean) {
                 ScreenHeader("Luz ambiente", trailing = trailing)
                 Text(link.label, color = if (link == Link.CONNECTED) Ink else RedText, fontSize = 13.sp, modifier = Modifier.padding(start = 6.dp, top = 4.dp))
                 Cabin(state, group, { group = it }, Modifier.weight(1f).fillMaxWidth().padding(vertical = 12.dp))
-                EffectRow(state)
+                Label("Toca el salpicadero o una puerta para editarla", Modifier.padding(start = 6.dp))
             }
-            Glass(Modifier.width(470.dp).fillMaxHeight()) {
+            Glass(Modifier.width(480.dp).fillMaxHeight()) {
                 Column(Modifier.verticalScroll(rememberScrollState())) { Controls(state, group) { group = it } }
             }
         }
@@ -96,32 +105,72 @@ fun AmbientScreen(wide: Boolean) {
             ScreenHeader("Luz", trailing = trailing)
             Text(link.label, color = if (link == Link.CONNECTED) Ink else RedText, fontSize = 13.sp, modifier = Modifier.padding(start = 6.dp))
             Cabin(state, group, { group = it }, Modifier.fillMaxWidth().height(420.dp))
-            EffectRow(state)
             Glass(Modifier.fillMaxWidth()) { Controls(state, group) { group = it } }
         }
     }
 }
 
-@Composable
-private fun Cabin(state: AmbientState, group: ZoneGroup, onPick: (ZoneGroup) -> Unit, modifier: Modifier) {
-    val pulse = rememberInfiniteTransition(label = "fx")
-    val breathe by pulse.animateFloat(0.3f, 1f, infiniteRepeatable(tween(2100, easing = FastOutSlowInEasing), RepeatMode.Reverse), label = "b")
-    val wave by pulse.animateFloat(0f, 1f, infiniteRepeatable(tween(2200), RepeatMode.Restart), label = "w")
+// ---------- Vista previa de los efectos en el coche dibujado ----------
 
-    val colors = Zone.entries.map { z -> animateColorAsState(state.zone(z).rgb.rgb(), tween(600), label = "c$z").value }
-    val levels = Zone.entries.map { z ->
-        val target = if (state.on) state.zone(z).bright / 100f else 0f
-        val base = animateFloatAsState(target, tween(600), label = "l$z").value
-        base * when (state.effect) {
-            Effect.FIXED -> 1f
-            Effect.BREATHE -> breathe
-            Effect.WAVE -> {
-                val d = when (z) { Zone.DASH -> 0f; Zone.FL, Zone.FR -> 0.16f; else -> 0.32f }
-                val t = (wave - d + 1f) % 1f
-                0.25f + 0.75f * (0.5f - 0.5f * kotlin.math.cos(t * 2 * Math.PI).toFloat())
-            }
+private fun hueShift(c: Color, deg: Float): Color {
+    val hsv = FloatArray(3)
+    android.graphics.Color.colorToHSV(android.graphics.Color.rgb((c.red * 255).toInt(), (c.green * 255).toInt(), (c.blue * 255).toInt()), hsv)
+    return Color.hsv((hsv[0] + deg + 360f) % 360f, if (hsv[1] < 0.25f) 0.65f else hsv[1], 1f)
+}
+
+/** Intensidad de una zona según el efecto (misma idea que el firmware, por zonas). */
+private fun previewLevel(effect: Effect, z: Zone, t: Float, sp: Float): Float {
+    val zi = z.ordinal
+    return when (effect) {
+        Effect.FIXED, Effect.RAINBOW, Effect.AURORA -> 1f
+        Effect.BREATHE -> 0.3f + 0.7f * (0.5f + 0.5f * cos((t * sp / 4.2f) * 2 * PI).toFloat())
+        Effect.WAVE -> {
+            val d = when (z) { Zone.DASH -> 0f; Zone.FL, Zone.FR -> 0.35f; else -> 0.7f }
+            val k = ((t * sp / 2.2f - d / 2.2f) % 1f + 1f) % 1f
+            0.25f + 0.75f * (0.5f - 0.5f * cos(k * 2 * PI).toFloat())
+        }
+        Effect.PULSE -> {
+            val k = (t * sp / 1.5f) % 1f
+            fun g(c: Float, w: Float) = exp(-((k - c) / w) * ((k - c) / w))
+            0.22f + 0.78f * max(g(0.10f, 0.045f), 0.7f * g(0.30f, 0.05f))
+        }
+        Effect.COMET -> {
+            // la luz pasa por las zonas en orden: salpicadero → delanteras → traseras
+            val order = when (z) { Zone.DASH -> 0f; Zone.FL, Zone.FR -> 1f; else -> 2f }
+            val head = (t * sp * 0.55f * 3f) % 3f
+            var d = head - order; if (d < 0) d += 3f
+            0.10f + 0.90f * exp(-d * 2.2f)
+        }
+        Effect.CANDLE -> {
+            val o = zi * 1.7f
+            val f = 0.5f * sin(t * sp * 3.1f + o) + 0.3f * sin(t * sp * 7.3f + o * 2) + 0.2f * sin(t * sp * 13.7f + o * 3)
+            0.62f + 0.30f * f
         }
     }
+}
+
+private fun previewColor(effect: Effect, z: Zone, base: Color, t: Float, sp: Float): Color = when (effect) {
+    Effect.RAINBOW -> Color.hsv(((t * sp * 28f / 256f * 360f) + z.ordinal * 56f) % 360f, 0.9f, 1f)
+    Effect.AURORA -> lerp(base, hueShift(base, 68f), 0.5f + 0.4f * sin(t * sp * 1.2f + z.ordinal))
+    else -> base
+}
+
+@Composable
+private fun Cabin(state: AmbientState, group: ZoneGroup, onPick: (ZoneGroup) -> Unit, modifier: Modifier) {
+    // reloj de animación en segundos
+    val t by produceState(0f) {
+        val start = withInfiniteAnimationFrameMillis { it }
+        while (true) withInfiniteAnimationFrameMillis { value = (it - start) / 1000f }
+    }
+    val sp = 0.4f + state.speed * 0.16f
+
+    val bases = Zone.entries.map { z -> animateColorAsState(state.zone(z).rgb.rgb(), tween(600), label = "c$z").value }
+    val targets = Zone.entries.map { z ->
+        animateFloatAsState(if (state.on) state.zone(z).bright / 100f else 0f, tween(600), label = "l$z").value
+    }
+    val animate = state.on && state.effect != Effect.FIXED
+    val colors = Zone.entries.map { z -> if (animate) previewColor(state.effect, z, bases[z.ordinal], t, sp) else bases[z.ordinal] }
+    val levels = Zone.entries.map { z -> targets[z.ordinal] * (if (animate) previewLevel(state.effect, z, t, sp) else 1f) }
     val selected = if (group == ZoneGroup.ALL) emptySet() else Zone.entries.filter { group.mask and it.bit != 0 }.toSet()
 
     Box(modifier, contentAlignment = Alignment.Center) {
@@ -143,14 +192,7 @@ private fun Cabin(state: AmbientState, group: ZoneGroup, onPick: (ZoneGroup) -> 
     }
 }
 
-@Composable
-private fun EffectRow(state: AmbientState) {
-    val ble = AmbientApp.instance.ble
-    Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Label("Toca el salpicadero o una puerta", Modifier.weight(1f))
-        Segmented(Effect.entries.map { it.label }, state.effect.ordinal) { ble.send(Cmd.effect(Effect.entries[it])) }
-    }
-}
+// ---------- Panel de ajustes ----------
 
 @Composable
 private fun Controls(state: AmbientState, group: ZoneGroup, onGroup: (ZoneGroup) -> Unit) {
@@ -171,6 +213,35 @@ private fun Controls(state: AmbientState, group: ZoneGroup, onGroup: (ZoneGroup)
         val sel = when (group) { ZoneGroup.ALL -> 0; ZoneGroup.DASH -> 1; else -> 2 }
         Segmented(chips.map { it.label }, sel, Modifier.fillMaxWidth()) { onGroup(chips[it]) }
 
+        // Escenas
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Label("Escenas")
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Scene.entries.forEach { s ->
+                    val on = state.scene == s
+                    val bg by animateColorAsState(if (on) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.035f), tween(350), label = "sc")
+                    val edge by animateColorAsState(if (on) Red else Color.White.copy(alpha = 0.08f), tween(350), label = "sce")
+                    Column(
+                        Modifier.weight(1f).height(88.dp).clip(RoundedCornerShape(20.dp)).background(bg)
+                            .border(1.dp, edge, RoundedCornerShape(20.dp))
+                            .clickable(role = Role.Button) { ble.send(Cmd.scene(s)) }.padding(12.dp),
+                        verticalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        when (s) {
+                            Scene.FIRMA -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Dot(Ink, 9); Dot(Red, 9)
+                            }
+                            Scene.CONFORT -> Icon(Icons.Sun, null, tint = Ink, modifier = Modifier.size(22.dp))
+                            Scene.SPORT -> Icon(Icons.Bolt, null, tint = RedText, modifier = Modifier.size(22.dp))
+                            Scene.NOCHE -> Icon(Icons.Moon, null, tint = Ink, modifier = Modifier.size(22.dp))
+                        }
+                        Text(s.label, color = Ink, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
+                    }
+                }
+            }
+        }
+
+        // Color
         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row { Label("Color", Modifier.weight(1f)); Text(state.swatchName(group.lead), color = Ink, fontSize = 14.sp) }
             PALETTE.chunked(5).forEach { row ->
@@ -189,6 +260,7 @@ private fun Controls(state: AmbientState, group: ZoneGroup, onGroup: (ZoneGroup)
             }
         }
 
+        // Intensidad
         Column {
             Row(verticalAlignment = Alignment.Bottom) {
                 Label("Intensidad", Modifier.weight(1f))
@@ -202,34 +274,55 @@ private fun Controls(state: AmbientState, group: ZoneGroup, onGroup: (ZoneGroup)
             )
         }
 
+        // Efecto
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Label("Escenas")
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Scene.entries.forEach { s ->
-                    val on = state.scene == s
-                    val bg by animateColorAsState(if (on) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.035f), tween(350), label = "sc")
-                    val edge by animateColorAsState(if (on) Red else Color.White.copy(alpha = 0.08f), tween(350), label = "sce")
-                    Column(
-                        Modifier.weight(1f).height(88.dp).clip(RoundedCornerShape(20.dp)).background(bg)
-                            .border(1.dp, edge, RoundedCornerShape(20.dp))
-                            .clickable(role = Role.Button) { ble.send(Cmd.scene(s)) }.padding(14.dp),
-                        verticalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        when (s) {
-                            Scene.FIRMA -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                                Box(Modifier.size(18.dp, 3.dp).clip(RoundedCornerShape(2.dp)).background(Ink))
-                                Box(Modifier.size(6.dp).clip(CircleShape).background(Red))
-                            }
-                            Scene.CONFORT -> Icon(Icons.Sun, null, tint = Ink, modifier = Modifier.size(22.dp))
-                            Scene.SPORT -> Icon(Icons.Bolt, null, tint = RedText, modifier = Modifier.size(22.dp))
-                            Scene.NOCHE -> Icon(Icons.Moon, null, tint = Ink, modifier = Modifier.size(22.dp))
-                        }
-                        Text(s.label, color = Ink, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            Row { Label("Efecto", Modifier.weight(1f)); Text(state.effect.label, color = Ink, fontSize = 14.sp) }
+            Effect.entries.chunked(4).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    row.forEach { e ->
+                        val on = state.effect == e
+                        val bg by animateColorAsState(if (on) Ink else Color.White.copy(alpha = 0.05f), tween(300), label = "fx")
+                        Box(
+                            Modifier.weight(1f).height(44.dp).clip(RoundedCornerShape(16.dp)).background(bg)
+                                .border(1.dp, if (on) Ink else GlassEdge, RoundedCornerShape(16.dp))
+                                .clickable(role = Role.Button) { ble.send(Cmd.effect(e)) },
+                            contentAlignment = Alignment.Center,
+                        ) { Text(e.label, color = if (on) Ground else Ink, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1) }
                     }
+                }
+            }
+            AnimatedVisibility(state.effect.animated, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
+                Column {
+                    Row(verticalAlignment = Alignment.Bottom) {
+                        Label("Velocidad", Modifier.weight(1f))
+                        Text(
+                            when { state.speed <= 3 -> "Lenta"; state.speed <= 7 -> "Media"; else -> "Rápida" },
+                            color = Ink, fontSize = 14.sp,
+                        )
+                    }
+                    var draft by remember(state.speed) { mutableFloatStateOf(state.speed.toFloat()) }
+                    Slider(
+                        value = draft,
+                        onValueChange = { draft = it },
+                        onValueChangeFinished = { ble.send(Cmd.speed(draft.toInt())) },
+                        valueRange = 1f..10f, steps = 8,
+                        colors = SliderDefaults.colors(thumbColor = Ink, activeTrackColor = Red, inactiveTrackColor = Color.White.copy(alpha = 0.12f)),
+                    )
                 }
             }
         }
 
-        PillButton("Probar bienvenida", modifier = Modifier.fillMaxWidth()) { ble.send(Cmd.WELCOME) }
+        // Opciones
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Bienvenida al abrir la puerta", color = Ink, fontSize = 15.sp)
+                Label("Las luces se encienden en secuencia al abrir el coche")
+            }
+            Switch(
+                checked = state.welcomeOnDoor,
+                onCheckedChange = { ble.send(Cmd.welcomeOnDoor(it)) },
+                colors = SwitchDefaults.colors(checkedTrackColor = Red, checkedThumbColor = Color.White, uncheckedTrackColor = Color.White.copy(alpha = 0.15f)),
+            )
+        }
     }
 }

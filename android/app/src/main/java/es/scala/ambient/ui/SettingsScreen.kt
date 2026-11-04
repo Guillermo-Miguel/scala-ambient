@@ -91,7 +91,18 @@ fun SettingsScreen(wide: Boolean, onReplayWelcome: () -> Unit) {
                     )
                 }
                 ToggleRow("Animación de bienvenida al abrir la app", s.showWelcome) { v -> app.prefs.update { it.copy(showWelcome = v) } }
-                PillButton("Ver la bienvenida ahora", onClick = onReplayWelcome)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    PillButton("Probar bienvenida", primary = true, icon = Icons.Replay) {
+                        // en pantalla siempre; en las luces del coche si el controlador está conectado
+                        if (link == Link.CONNECTED) app.ble.send(Cmd.WELCOME)
+                        onReplayWelcome()
+                    }
+                    Text(
+                        if (link == Link.CONNECTED) "Se verá en la pantalla y en las luces del coche."
+                        else "Se verá en la pantalla. Las luces la harán cuando el controlador esté conectado.",
+                        color = Quiet, fontSize = 13.sp, lineHeight = 18.sp, modifier = Modifier.weight(1f),
+                    )
+                }
             }
 
             Section("Pantalla") {
@@ -127,7 +138,6 @@ fun SettingsScreen(wide: Boolean, onReplayWelcome: () -> Unit) {
                 InfoRow("Controlador", link.label)
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     PillButton("Reconectar") { app.ble.start() }
-                    PillButton("Probar bienvenida", enabled = link == Link.CONNECTED) { app.ble.send(Cmd.WELCOME) }
                 }
             }
 

@@ -36,12 +36,24 @@ val PALETTE = listOf(
     Swatch("Verde", 0x7BE36B),
 )
 
-enum class Effect(val label: String, val code: Int) { FIXED("Fijo", 0), BREATHE("Respirar", 1), WAVE("Ola", 2) }
+/** Efectos de luz. `animated` = tiene velocidad ajustable. Mismos códigos que el firmware. */
+enum class Effect(val label: String, val code: Int, val animated: Boolean) {
+    FIXED("Fijo", 0, false),
+    BREATHE("Respirar", 1, true),
+    WAVE("Ola", 2, true),
+    PULSE("Latido", 3, true),
+    COMET("Cometa", 4, true),
+    CANDLE("Vela", 5, true),
+    RAINBOW("Arcoíris", 6, true),
+    AURORA("Aurora", 7, true);
+
+    companion object { fun of(code: Int) = entries.firstOrNull { it.code == code } ?: FIXED }
+}
 
 enum class Scene(val label: String, val code: Int, val iconRgb: Int) {
-    FIRMA("Firma", 1, 0xE4002B),
+    FIRMA("Esencia", 1, 0xE4002B),
     CONFORT("Confort", 2, 0xFFC98A),
-    SPORT("Sport", 3, 0xE4002B),
+    SPORT("Monte Carlo", 3, 0xE4002B),
     NOCHE("Noche", 4, 0xFF9F0A);
 
     companion object { fun of(code: Int) = entries.firstOrNull { it.code == code } }
@@ -53,6 +65,8 @@ data class AmbientState(
     val on: Boolean = true,
     val effect: Effect = Effect.FIXED,
     val scene: Scene? = Scene.FIRMA,
+    val speed: Int = 5,                 // 1 (lento) … 10 (rápido)
+    val welcomeOnDoor: Boolean = true,  // bienvenida de luces al abrir la puerta
     val zones: List<ZoneState> = listOf(
         ZoneState(0xF2F4F7, 70), ZoneState(0xE4002B, 60), ZoneState(0xE4002B, 60),
         ZoneState(0xE4002B, 50), ZoneState(0xE4002B, 50),
@@ -64,18 +78,25 @@ data class AmbientState(
         PALETTE.firstOrNull { it.rgb == zone(z).rgb }?.name ?: "Personalizado"
 
     companion object {
-        /** Formato del firmware: "<on> <fx> <scene> RRGGBBbb ×5" */
+        /**
+         * Formato del firmware:
+         * "<on> <fx> <scene> <speed> <welcome> RRGGBBbb ×5" (también acepta el antiguo sin speed/welcome).
+         */
         fun parse(text: String): AmbientState? = runCatching {
             val p = text.trim().split(" ")
+            val extended = p.size >= 10
             if (p.size < 8) return null
+            val z0 = if (extended) 5 else 3
             val zones = (0 until 5).map { i ->
-                val h = p[3 + i]
+                val h = p[z0 + i]
                 ZoneState(h.substring(0, 6).toInt(16), h.substring(6, 8).toInt(16))
             }
             AmbientState(
                 on = p[0] == "1",
-                effect = Effect.entries.firstOrNull { it.code == p[1].toInt() } ?: Effect.FIXED,
+                effect = Effect.of(p[1].toInt()),
                 scene = Scene.of(p[2].toInt()),
+                speed = if (extended) p[3].toInt().coerceIn(1, 10) else 5,
+                welcomeOnDoor = if (extended) p[4] == "1" else true,
                 zones = zones,
             )
         }.getOrNull()
@@ -90,5 +111,7 @@ object Cmd {
     fun bright(mask: Int, value: Int) = "B $mask ${value.coerceIn(0, 100)}"
     fun effect(e: Effect) = "F ${e.code}"
     fun scene(s: Scene) = "S ${s.code}"
+    fun speed(v: Int) = "V ${v.coerceIn(1, 10)}"
+    fun welcomeOnDoor(on: Boolean) = if (on) "O1" else "O0"
     const val WELCOME = "W"
 }

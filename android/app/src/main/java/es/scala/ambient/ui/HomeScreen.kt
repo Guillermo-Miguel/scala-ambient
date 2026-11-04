@@ -1,5 +1,13 @@
 package es.scala.ambient.ui
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.runtime.mutableStateOf
+import kotlin.math.roundToInt
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -74,6 +82,9 @@ fun HomeScreen(wide: Boolean, onOpen: (Dest) -> Unit) {
         }
     }
 
+    var weatherOpen by remember { mutableStateOf(false) }
+
+    Box(Modifier.fillMaxSize()) {
     if (wide) {
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             header()
@@ -83,7 +94,7 @@ fun HomeScreen(wide: Boolean, onOpen: (Dest) -> Unit) {
                     MediaTile(Modifier.weight(1f).fillMaxWidth(), onOpen)
                     Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                         AmbientTile(Modifier.weight(1f).fillMaxHeight(), onOpen)
-                        WeatherTile(Modifier.weight(1f).fillMaxHeight())
+                        WeatherTile(Modifier.weight(1f).fillMaxHeight()) { weatherOpen = true }
                     }
                 }
             }
@@ -95,8 +106,17 @@ fun HomeScreen(wide: Boolean, onOpen: (Dest) -> Unit) {
             NavTile(Modifier.fillMaxWidth().height(300.dp), onOpen)
             Row(Modifier.fillMaxWidth().height(190.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
                 AmbientTile(Modifier.weight(1f).fillMaxHeight(), onOpen)
-                WeatherTile(Modifier.weight(1f).fillMaxHeight())
+                WeatherTile(Modifier.weight(1f).fillMaxHeight()) { weatherOpen = true }
             }
+        }
+    }
+
+        AnimatedVisibility(
+            weatherOpen,
+            enter = fadeIn(tween(250)) + scaleIn(tween(320), initialScale = 0.94f),
+            exit = fadeOut(tween(200)) + scaleOut(tween(200), targetScale = 0.96f),
+        ) {
+            WeatherPanel(wide) { weatherOpen = false }
         }
     }
 }
@@ -174,6 +194,30 @@ private fun MediaTile(modifier: Modifier, onOpen: (Dest) -> Unit) {
             }
             return@Glass
         }
+        if (np == null) {
+            // no suena nada: reanudar y accesos directos a las apps de música
+            val apps = remember { media.installedMusicApps().take(5) }
+            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    RoundIcon(Icons.Play, "Reanudar", size = 54, filled = true) { media.resumeLast() }
+                    Column(Modifier.weight(1f)) {
+                        Text("No suena nada", color = Ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+                        Text("Reanuda o elige una app", color = Quiet, fontSize = 14.sp)
+                    }
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    apps.forEach { app ->
+                        val img = remember(app.packageName) { app.icon.asImageBitmap() }
+                        Image(
+                            img, app.label,
+                            modifier = Modifier.size(46.dp).clip(RoundedCornerShape(12.dp))
+                                .clickable(role = Role.Button, onClickLabel = "Abrir ${app.label}") { media.openApp(app.packageName) },
+                        )
+                    }
+                }
+            }
+            return@Glass
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxSize()) {
             AlbumArt(np, Modifier.fillMaxHeight().aspectRatio(1f))
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -225,27 +269,28 @@ private fun AmbientTile(modifier: Modifier, onOpen: (Dest) -> Unit) {
     val ble = AmbientApp.instance.ble
     val st by ble.state.collectAsState()
     val link by ble.link.collectAsState()
-    val dash = st.zone(Zone.DASH)
-    val door = st.zone(Zone.FL)
-    Glass(modifier, onClick = { onOpen(Dest.LIGHT) }) {
-        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Label("Luz ambiente", Modifier.weight(1f))
-                Icon(Icons.Chevron, null, tint = Quiet, modifier = Modifier.size(18.dp))
-            }
-            Row(Modifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterHorizontally)) {
-                val doorC = if (st.on) door.rgb.rgb() else Faint
-                val dashC = if (st.on) dash.rgb.rgb() else Faint
-                Box(Modifier.size(6.dp, 24.dp).clip(RoundedCornerShape(3.dp)).background(doorC))
-                Box(Modifier.weight(1f).height(4.dp).clip(RoundedCornerShape(2.dp)).background(dashC))
-                Box(Modifier.size(6.dp, 24.dp).clip(RoundedCornerShape(3.dp)).background(doorC))
-            }
-            Column {
-                Text(
-                    if (!st.on) "Apagada" else "${st.scene?.label ?: "Personalizado"} · ${dash.bright} %",
-                    color = Ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
-                )
-                Text(link.label, color = Quiet, fontSize = 14.sp, maxLines = 1)
+    Glass(modifier, onClick = { onOpen(Dest.LIGHT) }, padding = PaddingValues(start = 14.dp, end = 18.dp, top = 14.dp, bottom = 14.dp)) {
+        Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
+            // el coche con sus luces, en pequeño
+            CarTopView(
+                colors = Zone.entries.map { st.zone(it).rgb.rgb() },
+                levels = Zone.entries.map { if (st.on) st.zone(it).bright / 100f else 0f },
+                selected = emptySet(), onTap = null,
+                modifier = Modifier.fillMaxHeight(),
+            )
+            Column(Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.SpaceBetween) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Label("Luz ambiente", Modifier.weight(1f))
+                    Icon(Icons.Chevron, null, tint = Quiet, modifier = Modifier.size(18.dp))
+                }
+                Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text(
+                        if (!st.on) "Apagada" else st.scene?.label ?: "Personalizado",
+                        color = Ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                    )
+                    if (st.on) Text("${st.effect.label} · ${st.zone(Zone.DASH).bright} %", color = Quiet, fontSize = 14.sp, maxLines = 1)
+                }
+                Text(link.label, color = if (link == es.scala.ambient.Link.CONNECTED) Quiet else Faint, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -253,20 +298,37 @@ private fun AmbientTile(modifier: Modifier, onOpen: (Dest) -> Unit) {
 
 // ---------- Tiempo ----------
 @Composable
-private fun WeatherTile(modifier: Modifier) {
+private fun WeatherTile(modifier: Modifier, onExpand: () -> Unit) {
     val w by NavModel.weather.collectAsState()
-    Glass(modifier) {
+    Glass(modifier, onClick = onExpand) {
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Label("Exterior", Modifier.weight(1f))
-                Icon(if ((w?.code ?: 0) <= 1) Icons.Sun else Icons.Cloud, null, tint = Quiet, modifier = Modifier.size(20.dp))
+                Label(w?.place ?: "Exterior", Modifier.weight(1f))
+                Icon(weatherIcon(w?.code ?: 0, w?.isDay ?: true), null, tint = Ink, modifier = Modifier.size(22.dp))
             }
-            Text(
-                w?.let { String.format(Locale("es", "ES"), "%.0f°", it.tempC) } ?: "—",
-                color = Ink, fontSize = 54.sp, fontWeight = FontWeight.Light,
-            )
-            Text(w?.label ?: "Esperando posición", color = Quiet, fontSize = 14.sp)
+            Row(verticalAlignment = Alignment.Bottom, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(w?.let { deg(it.tempC) } ?: "—", color = Ink, fontSize = 46.sp, fontWeight = FontWeight.Light, lineHeight = 46.sp)
+                Column(Modifier.padding(bottom = 6.dp)) {
+                    Text(w?.label ?: "Esperando posición", color = Ink, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    w?.today?.let { Text("↑ ${deg(it.maxC)}  ↓ ${deg(it.minC)}", color = Quiet, fontSize = 13.sp, maxLines = 1) }
+                }
+            }
+            if (w != null) {
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    MiniStat(Icons.Drop, "${w!!.rainProbNow} %")
+                    MiniStat(Icons.Wind, "${w!!.windKmh.roundToInt()} km/h")
+                    MiniStat(Icons.Humidity, "${w!!.humidity} %")
+                }
+            }
         }
+    }
+}
+
+@Composable
+private fun MiniStat(icon: androidx.compose.ui.graphics.vector.ImageVector, text: String) {
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+        Icon(icon, null, tint = Quiet, modifier = Modifier.size(14.dp))
+        Text(text, color = Quiet, fontSize = 13.sp, maxLines = 1)
     }
 }
 

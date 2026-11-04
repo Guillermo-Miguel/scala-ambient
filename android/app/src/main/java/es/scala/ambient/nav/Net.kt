@@ -18,17 +18,51 @@ import java.util.Locale
 /** Ruta calculada: puntos para dibujarla, distancia y duración. */
 data class Route(val points: List<Pair<Double, Double>>, val meters: Double, val seconds: Double)
 
-data class Weather(val tempC: Double, val code: Int) {
-    val label: String get() = when (code) {
-        0 -> "Despejado"
-        1, 2 -> "Poco nuboso"
-        3 -> "Nublado"
-        45, 48 -> "Niebla"
-        in 51..57 -> "Llovizna"
-        in 61..67, in 80..82 -> "Lluvia"
-        in 71..77, 85, 86 -> "Nieve"
-        in 95..99 -> "Tormenta"
-        else -> "—"
+fun weatherLabel(code: Int): String = when (code) {
+    0 -> "Despejado"
+    1 -> "Casi despejado"
+    2 -> "Poco nuboso"
+    3 -> "Nublado"
+    45, 48 -> "Niebla"
+    in 51..57 -> "Llovizna"
+    in 61..65 -> "Lluvia"
+    66, 67 -> "Lluvia helada"
+    in 71..77 -> "Nieve"
+    in 80..82 -> "Chubascos"
+    85, 86 -> "Chubascos de nieve"
+    in 95..99 -> "Tormenta"
+    else -> "—"
+}
+
+data class HourWeather(val hour: Int, val tempC: Double, val rainProb: Int, val code: Int)
+data class DayWeather(val date: String, val code: Int, val maxC: Double, val minC: Double, val rainProb: Int, val rainMm: Double)
+
+/** Tiempo actual, próximas horas y próximos días (Open-Meteo). */
+data class Weather(
+    val place: String?,
+    val tempC: Double,
+    val feelsC: Double,
+    val humidity: Int,
+    val precipMm: Double,
+    val windKmh: Double,
+    val windDir: Int,
+    val gustKmh: Double,
+    val code: Int,
+    val isDay: Boolean,
+    val uv: Double,
+    val pressure: Double,
+    val sunrise: String?,
+    val sunset: String?,
+    val hours: List<HourWeather>,
+    val days: List<DayWeather>,
+) {
+    val label: String get() = weatherLabel(code)
+    val today: DayWeather? get() = days.firstOrNull()
+    val rainProbNow: Int get() = hours.firstOrNull()?.rainProb ?: today?.rainProb ?: 0
+
+    val windFrom: String get() {
+        val dirs = listOf("N", "NE", "E", "SE", "S", "SO", "O", "NO")
+        return dirs[((windDir + 22.5) / 45).toInt().mod(8)]
     }
 }
 
@@ -89,11 +123,57 @@ object Net {
     suspend fun weather(lat: Double, lon: Double): Weather {
         val url = String.format(
             Locale.US,
-            "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f&current=temperature_2m,weather_code",
+            "https://api.open-meteo.com/v1/forecast?latitude=%.4f&longitude=%.4f" +
+                "&current=temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,is_day," +
+                "wind_speed_10m,wind_direction_10m,wind_gusts_10m,pressure_msl,uv_index" +
+                "&hourly=temperature_2m,precipitation_probability,weather_code&forecast_hours=12" +
+                "&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,sunrise,sunset" +
+                "&forecast_days=6&timezone=auto",
             lat, lon,
         )
-        val cur = JSONObject(get(url)).getJSONObject("current")
-        return Weather(cur.getDouble("temperature_2m"), cur.getInt("weather_code"))
+        val root = JSONObject(get(url))
+        val cur = root.getJSONObject("current")
+        val h = root.getJSONObject("hourly")
+        val hTime = h.getJSONArray("time"); val hT = h.getJSONArray("temperature_2m")
+        val hP = h.getJSONArray("precipitation_probability"); val hC = h.getJSONArray("weather_code")
+        val hours = (0 until hTime.length()).map { i ->
+            HourWeather(hTime.getString(i).substring(11, 13).toInt(), hT.optDouble(i), hP.optInt(i), hC.optInt(i))
+        }
+        val d = root.getJSONObject("daily")
+        val dTime = d.getJSONArray("time")
+        val days = (0 until dTime.length()).map { i ->
+            DayWeather(
+                dTime.getString(i), d.getJSONArray("weather_code").optInt(i),
+                d.getJSONArray("temperature_2m_max").optDouble(i), d.getJSONArray("temperature_2m_min").optDouble(i),
+                d.getJSONArray("precipitation_probability_max").optInt(i), d.getJSONArray("precipitation_sum").optDouble(i),
+            )
+        }
+        val place = runCatching { placeName(lat, lon) }.getOrNull()
+        return Weather(
+            place = place,
+            tempC = cur.getDouble("temperature_2m"),
+            feelsC = cur.optDouble("apparent_temperature"),
+            humidity = cur.optInt("relative_humidity_2m"),
+            precipMm = cur.optDouble("precipitation", 0.0),
+            windKmh = cur.optDouble("wind_speed_10m", 0.0),
+            windDir = cur.optInt("wind_direction_10m"),
+            gustKmh = cur.optDouble("wind_gusts_10m", 0.0),
+            code = cur.getInt("weather_code"),
+            isDay = cur.optInt("is_day", 1) == 1,
+            uv = cur.optDouble("uv_index", 0.0),
+            pressure = cur.optDouble("pressure_msl", 0.0),
+            sunrise = d.getJSONArray("sunrise").optString(0, "").takeIf { it.length >= 16 }?.substring(11, 16),
+            sunset = d.getJSONArray("sunset").optString(0, "").takeIf { it.length >= 16 }?.substring(11, 16),
+            hours = hours,
+            days = days,
+        )
+    }
+
+    /** Nombre de la localidad para una posición (Nominatim, búsqueda inversa). */
+    suspend fun placeName(lat: Double, lon: Double): String? {
+        val url = String.format(Locale.US, "https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&lat=%.5f&lon=%.5f", lat, lon)
+        val a = JSONObject(get(url)).optJSONObject("address") ?: return null
+        return listOf("city", "town", "village", "municipality", "county").firstNotNullOfOrNull { k -> a.optString(k).ifBlank { null } }
     }
 
     /** Abre la navegación paso a paso en la app elegida (en el coche sale en Android Auto). */

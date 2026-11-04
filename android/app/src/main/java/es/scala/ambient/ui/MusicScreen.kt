@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -82,17 +83,24 @@ fun MusicScreen(wide: Boolean) {
                 return@Column
             }
 
-            if (wide) {
+            if (np == null) {
+                // no suena nada: accesos directos a las apps de música
+                Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) { MusicLauncher(wide) }
+            } else if (wide) {
                 Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(36.dp), verticalAlignment = Alignment.CenterVertically) {
                     Crossfade(np?.title to np?.art, animationSpec = tween(400), modifier = Modifier.fillMaxHeight(0.92f).aspectRatio(1f), label = "art") {
                         AlbumArt(np, Modifier.fillMaxSize())
                     }
-                    Column(Modifier.weight(1f)) { Player(np, sources) }
+                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                        Player(np, sources)
+                        if (np?.playing != true) AppRow()
+                    }
                 }
             } else {
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(24.dp)) {
                     AlbumArt(np, Modifier.fillMaxWidth().aspectRatio(1f))
                     Player(np, sources)
+                    if (np?.playing != true) AppRow()
                 }
             }
         }
@@ -205,5 +213,65 @@ fun MediaAccessCard(modifier: Modifier = Modifier) {
                 PillButton("Abrir ficha de la app") { context.startActivity(media.appInfoIntent()) }
             }
         }
+    }
+}
+
+/** Pantalla cuando no suena nada: reanudar lo último y abrir cualquier app de música instalada. */
+@Composable
+private fun MusicLauncher(wide: Boolean) {
+    val media = AmbientApp.instance.media
+    val apps = remember { media.installedMusicApps() }
+    Column(verticalArrangement = Arrangement.spacedBy(20.dp)) {
+        Glass(Modifier.fillMaxWidth()) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                RoundIcon(Icons.Play, "Reanudar", size = 64, filled = true) { media.resumeLast() }
+                Column(Modifier.weight(1f)) {
+                    Text("No suena nada", color = Ink, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                    Text("Reanuda lo último que escuchabas o abre una app.", color = Quiet, fontSize = 14.sp)
+                }
+            }
+        }
+        if (apps.isEmpty()) {
+            Text("No he encontrado apps de música instaladas.", color = Quiet, fontSize = 15.sp)
+        } else {
+            Label("Tus apps de música")
+            apps.chunked(if (wide) 6 else 3).forEach { row ->
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    row.forEach { app -> AppTile(app, Modifier.weight(1f)) }
+                    repeat((if (wide) 6 else 3) - row.size) { androidx.compose.foundation.layout.Spacer(Modifier.weight(1f)) }
+                }
+            }
+        }
+    }
+}
+
+/** Fila compacta de apps (cuando hay algo en pausa). */
+@Composable
+fun AppRow(max: Int = 6) {
+    val media = AmbientApp.instance.media
+    val apps = remember { media.installedMusicApps() }
+    if (apps.isEmpty()) return
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Label("Abrir otra app")
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            apps.take(max).forEach { app -> AppTile(app, Modifier.widthIn(min = 92.dp)) }
+        }
+    }
+}
+
+@Composable
+private fun AppTile(app: es.scala.ambient.media.MusicApp, modifier: Modifier) {
+    val media = AmbientApp.instance.media
+    val icon = remember(app.packageName) { app.icon.asImageBitmap() }
+    Column(
+        modifier.clip(RoundedCornerShape(22.dp)).background(Color.White.copy(alpha = 0.05f))
+            .border(1.dp, GlassEdge, RoundedCornerShape(22.dp))
+            .clickable(role = Role.Button, onClickLabel = "Abrir ${app.label}") { media.openApp(app.packageName) }
+            .padding(vertical = 16.dp, horizontal = 10.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Image(icon, null, modifier = Modifier.size(52.dp).clip(RoundedCornerShape(14.dp)))
+        Text(app.label, color = Ink, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }

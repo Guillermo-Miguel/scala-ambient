@@ -138,7 +138,9 @@ class AmbientBle(private val context: Context) {
             'P' -> s.copy(on = when (cmd) { "P1" -> true; "P0" -> false; else -> !s.on })
             'C' -> s.copy(on = true, scene = null, zones = each(p[1].toInt()) { it.copy(rgb = p[2].toInt(16)) })
             'B' -> s.copy(on = true, scene = null, zones = each(p[1].toInt()) { it.copy(bright = p[2].toInt()) })
-            'F' -> s.copy(effect = Effect.entries.first { it.code == p[1].toInt() })
+            'F' -> s.copy(effect = Effect.of(p[1].toInt()))
+            'V' -> s.copy(speed = p[1].toInt().coerceIn(1, 10))
+            'O' -> s.copy(welcomeOnDoor = cmd == "O1")
             'S' -> Scene.of(p[1].toInt())?.let { sceneState(s, it) } ?: s
             else -> s
         }

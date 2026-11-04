@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.AudioManager
 import android.media.MediaMetadata
 import android.media.session.MediaController
 import android.media.session.MediaSessionManager
@@ -14,6 +15,8 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.provider.Settings
+import android.view.KeyEvent
+import androidx.core.graphics.drawable.toBitmap
 import androidx.core.app.NotificationManagerCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -221,4 +224,50 @@ class MediaRepo(private val context: Context) {
     }
 
     fun labelFor(pkg: String) = appLabel(pkg)
+
+    // ---------- Apps de música instaladas (accesos directos) ----------
+
+    /** Apps de música conocidas, en este orden si están instaladas. */
+    private val preferred = listOf(
+        "com.google.android.apps.youtube.music", "com.spotify.music", "com.apple.android.music",
+        "com.amazon.mp3", "deezer.android.app", "com.aspiro.tidal", "com.soundcloud.android",
+        "com.google.android.youtube", "com.sec.android.app.music", "com.ivoox.app", "fm.castbox.audiobook.radio.podcast",
+    )
+
+    /**
+     * Apps instaladas que reproducen música: las conocidas y cualquier otra que ofrezca
+     * un servicio de medios (lo que usan Android Auto y los mandos del coche).
+     */
+    fun installedMusicApps(): List<MusicApp> {
+        val pm = context.packageManager
+        val found = LinkedHashSet<String>()
+        preferred.forEach { p -> if (pm.getLaunchIntentForPackage(p) != null) found += p }
+        runCatching {
+            pm.queryIntentServices(Intent("android.media.browse.MediaBrowserService"), 0)
+                .map { it.serviceInfo.packageName }
+                .filter { it != context.packageName && pm.getLaunchIntentForPackage(it) != null }
+                .sorted()
+                .forEach { found += it }
+        }
+        return found.take(12).mapNotNull { p ->
+            runCatching {
+                MusicApp(p, appLabel(p), pm.getApplicationIcon(p).toBitmap(96, 96))
+            }.getOrNull()
+        }
+    }
+
+    fun openApp(pkg: String) {
+        context.packageManager.getLaunchIntentForPackage(pkg)
+            ?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            ?.let { context.startActivity(it) }
+    }
+
+    /** «Reanudar»: manda la tecla Play al sistema; sigue la última app que sonaba. */
+    fun resumeLast() {
+        val am = context.getSystemService(AudioManager::class.java)
+        am.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_MEDIA_PLAY))
+        am.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_MEDIA_PLAY))
+    }
 }
+
+data class MusicApp(val packageName: String, val label: String, val icon: Bitmap)

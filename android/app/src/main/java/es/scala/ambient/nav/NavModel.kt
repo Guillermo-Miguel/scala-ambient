@@ -71,8 +71,9 @@ object NavModel {
     }
 
     /** Tiempo exterior; se actualiza cada 15 minutos como mucho. */
-    fun refreshWeather() {
-        if (weatherJob?.isActive == true) return
+    fun refreshWeather(force: Boolean = false) {
+        if (weatherJob?.isActive == true && !force) return
+        weatherJob?.cancel()
         weatherJob = scope.launch {
             while (true) {
                 val p = here()

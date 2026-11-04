@@ -55,7 +55,7 @@ const uint16_t LEN[5] = { 72, 36, 36, 30, 30 };   // dash, fl, fr, rl, rr
 // =======================================================================
 
 enum Zone { DASH = 0, FL, FR, RL, RR, ZONES };
-enum Effect { FX_FIXED = 0, FX_BREATHE = 1, FX_WAVE = 2 };
+enum Effect { FX_FIXED = 0, FX_BREATHE, FX_WAVE, FX_PULSE, FX_COMET, FX_CANDLE, FX_RAINBOW, FX_AURORA, FX_COUNT };
 
 struct State {
   uint8_t magic;
@@ -64,6 +64,8 @@ struct State {
   uint8_t scene;           // 0 = personalizado, 1..4 = escenas
   uint8_t rgb[ZONES][3];
   uint8_t bright[ZONES];   // 0..100
+  uint8_t speed;           // 1 (lento) .. 10 (rápido)
+  uint8_t welcomeOnDoor;   // 1 = bienvenida al abrir la puerta
 };
 
 static State st;
@@ -91,9 +93,9 @@ static uint32_t welcomeStart = 0;
 struct SceneDef { uint32_t dash, front, rear; uint8_t bd, bf, br; };
 static const SceneDef SCENES[5] = {
   { 0, 0, 0, 0, 0, 0 },
-  { 0xF2F4F7, 0xE4002B, 0xE4002B, 70, 60, 50 },   // 1 Firma: salpicadero blanco, puertas rojas
+  { 0xF2F4F7, 0xE4002B, 0xE4002B, 70, 60, 50 },   // 1 Esencia: salpicadero blanco, puertas rojas
   { 0xFFC98A, 0xFFC98A, 0xFFC98A, 62, 55, 45 },   // 2 Confort
-  { 0xE4002B, 0xE4002B, 0xE4002B, 92, 85, 75 },   // 3 Sport
+  { 0xE4002B, 0xE4002B, 0xE4002B, 92, 85, 75 },   // 3 Monte Carlo
   { 0xFF9F0A, 0xFF9F0A, 0xFF9F0A, 16, 12, 10 },   // 4 Noche
 };
 
@@ -118,15 +120,17 @@ static void applyScene(uint8_t id) {
 
 static void defaults() {
   memset(&st, 0, sizeof(st));
-  st.magic = 0x5D;
+  st.magic = 0x5E;
   st.fx = FX_FIXED;
+  st.speed = 5;
+  st.welcomeOnDoor = 1;
   applyScene(1);
 }
 
 static void loadState() {
   prefs.begin("ambient", false);
   size_t n = prefs.getBytes("st", &st, sizeof(st));
-  if (n != sizeof(st) || st.magic != 0x5D) defaults();
+  if (n != sizeof(st) || st.magic != 0x5E) defaults();
 }
 
 static void markDirty() { dirty = true; dirtyAt = millis(); }
@@ -139,11 +143,11 @@ static void saveIfNeeded() {
 }
 
 // ---------- Estado → texto para la app ----------
-// "<on> <fx> <scene> RRGGBBbb RRGGBBbb RRGGBBbb RRGGBBbb RRGGBBbb"
+// "<on> <fx> <scene> <speed> <welcome> RRGGBBbb RRGGBBbb RRGGBBbb RRGGBBbb RRGGBBbb"
 static void notifyState() {
   if (!stateChar) return;
-  char buf[80];
-  int p = snprintf(buf, sizeof(buf), "%u %u %u", st.on, st.fx, st.scene);
+  char buf[96];
+  int p = snprintf(buf, sizeof(buf), "%u %u %u %u %u", st.on, st.fx, st.scene, st.speed, st.welcomeOnDoor);
   for (int z = 0; z < ZONES; z++) {
     p += snprintf(buf + p, sizeof(buf) - p, " %02X%02X%02X%02X",
                   st.rgb[z][0], st.rgb[z][1], st.rgb[z][2], st.bright[z]);
@@ -164,8 +168,10 @@ static void startWelcome() {
 // P1 / P0 / PT           encender / apagar / alternar
 // C <mask> <RRGGBB>      color en las zonas de la máscara (1 dash, 2 fl, 4 fr, 8 rl, 16 rr)
 // B <mask> <0..100>      intensidad
-// F <0|1|2>              efecto: fijo, respirar, ola
-// S <1..4>               escena: firma, confort, sport, noche
+// F <0..7>               efecto: fijo, respirar, ola, latido, cometa, vela, arcoíris, aurora
+// V <1..10>              velocidad de los efectos
+// O1 / O0                bienvenida al abrir la puerta: sí / no
+// S <1..4>               escena: esencia, confort, monte carlo, noche
 // W                      repetir bienvenida
 // ?                      pedir estado
 static void handleCommand(const char *cmd) {
@@ -192,11 +198,19 @@ static void handleCommand(const char *cmd) {
     }
   } else if (op == 'F') {
     int f = atoi(cmd + 1);
-    if (f >= 0 && f <= 2) { st.fx = f; markDirty(); }
+    if (f >= 0 && f < FX_COUNT) { st.fx = f; markDirty(); }
+  } else if (op == 'V') {
+    int v = atoi(cmd + 1);
+    if (v >= 1 && v <= 10) { st.speed = v; markDirty(); }
+  } else if (op == 'O') {
+    st.welcomeOnDoor = cmd[1] == '1'; markDirty();
   } else if (op == 'S') {
     applyScene(atoi(cmd + 1)); markDirty();
   } else if (op == 'W') {
+    bool wasOn = st.on;
+    st.on = 1;                 // probar la bienvenida aunque estén apagadas
     startWelcome();
+    if (!wasOn) markDirty();
   }
   notifyState();
 }
@@ -244,17 +258,57 @@ static inline float smooth(float x) { x = clamp01(x); return x * x * (3 - 2 * x)
 // Brillo perceptual: 0..100 → 0..1 con curva gamma
 static inline float perceptual(uint8_t b) { return powf(b / 100.0f, 2.2f); }
 
-static float effectFactor(int z, uint32_t now) {
-  if (st.fx == FX_BREATHE) {
-    float t = (now % 4200) / 4200.0f;
-    return 0.3f + 0.7f * (0.5f + 0.5f * cosf(t * 2 * PI));
+static inline float speedMul() { return 0.4f + st.speed * 0.16f; }   // 1 → 0,56× · 5 → 1,2× · 10 → 2×
+static inline float gauss(float x, float c, float w) { float d = (x - c) / w; return expf(-d * d); }
+
+// Intensidad 0..1 de un LED según el efecto. t = segundos.
+static float effectLed(int z, int i, float t) {
+  float sp = speedMul();
+  int n = LEN[z] > 1 ? LEN[z] : 1;
+  float pos = (float)i / n;
+  switch (st.fx) {
+    case FX_BREATHE: {
+      float k = fmodf(t * sp / 4.2f, 1.0f);
+      return 0.3f + 0.7f * (0.5f + 0.5f * cosf(k * 2 * PI));
+    }
+    case FX_WAVE: {
+      static const float delay[ZONES] = { 0.0f, 0.35f, 0.35f, 0.7f, 0.7f };
+      float k = fmodf(t * sp / 2.2f - delay[z] / 2.2f + 10.0f, 1.0f);
+      return 0.25f + 0.75f * (0.5f - 0.5f * cosf(k * 2 * PI));
+    }
+    case FX_PULSE: {                      // dos latidos y pausa
+      float k = fmodf(t * sp / 1.5f, 1.0f);
+      return 0.22f + 0.78f * fmaxf(gauss(k, 0.10f, 0.045f), 0.7f * gauss(k, 0.30f, 0.05f));
+    }
+    case FX_COMET: {                      // una luz recorre cada tira dejando estela
+      float head = fmodf(t * sp * 0.55f + (z == DASH ? 0 : 0.25f * z), 1.0f);
+      float d = head - pos; if (d < 0) d += 1.0f;
+      return 0.10f + 0.90f * expf(-d * 9.0f);
+    }
+    case FX_CANDLE: {                     // parpadeo suave y cálido, distinto en cada zona
+      float o = z * 1.7f;
+      float f = 0.5f * sinf(t * sp * 3.1f + o) + 0.3f * sinf(t * sp * 7.3f + o * 2) + 0.2f * sinf(t * sp * 13.7f + o * 3);
+      return 0.62f + 0.30f * f + 0.06f * sinf(i * 0.9f + t * 5);
+    }
+    default:
+      return 1.0f;
   }
-  if (st.fx == FX_WAVE) {
-    static const float delay[ZONES] = { 0.0f, 0.35f, 0.35f, 0.7f, 0.7f };
-    float t = fmodf(now / 2200.0f - delay[z] / 2.2f + 10.0f, 1.0f);
-    return 0.25f + 0.75f * (0.5f - 0.5f * cosf(t * 2 * PI));
+}
+
+// Color de un LED: igual al de la zona salvo en arcoíris y aurora.
+static CRGB effectColor(int z, int i, float t, const CRGB &base) {
+  float sp = speedMul();
+  if (st.fx == FX_RAINBOW) {
+    uint8_t hue = (uint8_t)(t * sp * 28.0f + i * 4 + z * 40);
+    return CHSV(hue, 230, 255);
   }
-  return 1.0f;
+  if (st.fx == FX_AURORA) {               // el color de la zona se funde con uno vecino que se mueve
+    CHSV h = rgb2hsv_approximate(base);
+    CRGB other = CHSV(h.hue + 48, h.sat < 60 ? 160 : h.sat, 255);
+    float k = 0.5f + 0.5f * sinf(i * 0.22f + t * sp * 1.2f + z);
+    return blend(base, other, (uint8_t)(k * 200));
+  }
+  return base;
 }
 
 // Bienvenida: la tira del salpicadero crece desde el centro y luego se encienden las puertas,
@@ -285,10 +339,11 @@ static void render(uint32_t now) {
     level[z] += (goal - level[z]) * 0.09f;
     nblend(shown[z], target, 24);
 
-    float fx = (st.on && !welcomeRunning) ? effectFactor(z, now) : 1.0f;
+    bool fx = st.on && !welcomeRunning && st.fx != FX_FIXED;
+    float ts = now / 1000.0f;
     for (int i = 0; i < LEN[z]; i++) {
-      float a = welcomeRunning ? welcomeLed(z, i, wt) * goal : level[z] * fx;
-      CRGB c = welcomeRunning ? target : shown[z];
+      float a = welcomeRunning ? welcomeLed(z, i, wt) * goal : level[z] * (fx ? effectLed(z, i, ts) : 1.0f);
+      CRGB c = welcomeRunning ? target : (fx ? effectColor(z, i, ts, shown[z]) : shown[z]);
       c.nscale8_video((uint8_t)(clamp01(a) * 255));
       leds[z][i] = c;
     }
@@ -349,7 +404,7 @@ void setup() {
   if (esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT0) {
     doorWasOpen = true;
     lastDoorSeen = millis();
-    startWelcome();
+    if (st.welcomeOnDoor) startWelcome();
   }
 }
 
@@ -364,7 +419,7 @@ void loop() {
   bool doorOpen = now - lastDoorSeen < 300;
   bool ignition = digitalRead(PIN_IGN) == LOW;
 
-  if (doorOpen && !doorWasOpen && !ignition && now - lastWelcome > WELCOME_COOLDOWN) startWelcome();
+  if (st.welcomeOnDoor && doorOpen && !doorWasOpen && !ignition && now - lastWelcome > WELCOME_COOLDOWN) startWelcome();
   doorWasOpen = doorOpen;
 
   if (doorOpen || ignition || welcomeRunning) lastActivity = now;   // las órdenes de la app también cuentan (handleCommand)

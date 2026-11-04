@@ -111,7 +111,9 @@ fun NavScreen(wide: Boolean) {
         recenter++
     }
 
-    LaunchedEffect(route) { if (route != null) { onMe = false; recenter++ } }
+    // encuadrar la ruta solo cuando cambia, no cada vez que se entra en la pantalla
+    val routeAtEntry = remember { route }
+    LaunchedEffect(route) { if (route != null && route !== routeAtEntry) { onMe = false; recenter++ } }
 
     Box(Modifier.fillMaxSize().clip(RoundedCornerShape(30.dp)).background(Color(0xFF0B0B0C))) {
         if (hasLoc) {
