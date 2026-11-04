@@ -21,12 +21,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -48,6 +51,7 @@ import es.scala.ambient.AmbientApp
 import es.scala.ambient.Cmd
 import es.scala.ambient.Link
 import es.scala.ambient.NavApp
+import kotlin.math.roundToInt
 
 @Composable
 fun SettingsScreen(wide: Boolean, onReplayWelcome: () -> Unit) {
@@ -88,6 +92,26 @@ fun SettingsScreen(wide: Boolean, onReplayWelcome: () -> Unit) {
                 }
                 ToggleRow("Animación de bienvenida al abrir la app", s.showWelcome) { v -> app.prefs.update { it.copy(showWelcome = v) } }
                 PillButton("Ver la bienvenida ahora", onClick = onReplayWelcome)
+            }
+
+            Section("Pantalla") {
+                Row(verticalAlignment = Alignment.Bottom) {
+                    Label("Tamaño de la interfaz", Modifier.weight(1f))
+                    Text("${(s.uiScale * 100).roundToInt()} %", color = Ink, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                }
+                var scaleDraft by remember(s.uiScale) { mutableFloatStateOf(s.uiScale) }
+                Slider(
+                    value = scaleDraft,
+                    onValueChange = { scaleDraft = (it * 20).roundToInt() / 20f },          // pasos de 5 %
+                    onValueChangeFinished = { app.prefs.update { st -> st.copy(uiScale = scaleDraft) } },
+                    valueRange = 0.75f..1.3f,
+                    colors = SliderDefaults.colors(thumbColor = Ink, activeTrackColor = Red, inactiveTrackColor = Color.White.copy(alpha = 0.14f)),
+                )
+                Text(
+                    "La app ya se ajusta sola al tamaño de la pantalla. Usa esto para afinarlo en la tuya: menos si algo no cabe, más si se lee pequeño.",
+                    color = Quiet, fontSize = 13.sp, lineHeight = 18.sp,
+                )
+                PillButton("Restablecer (100 %)") { app.prefs.update { it.copy(uiScale = 1f) } }
             }
 
             Section("Navegación") {

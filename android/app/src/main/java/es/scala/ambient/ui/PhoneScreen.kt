@@ -30,7 +30,9 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -189,7 +191,10 @@ private fun FavoriteCard(f: Favorite, onCall: () -> Unit) {
 @Composable
 private fun Dialer(number: String, onChange: (String) -> Unit, onCall: () -> Unit) {
     val keys = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#")
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(
+        Modifier.verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(
                 number.ifEmpty { "Marcar número" }, color = if (number.isEmpty()) Faint else Ink,

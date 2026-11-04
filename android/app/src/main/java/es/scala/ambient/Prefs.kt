@@ -26,6 +26,8 @@ data class Settings(
     val navApp: NavApp = NavApp.GOOGLE_MAPS,
     val showWelcome: Boolean = true,
     val glassBlur: Boolean = true,
+    /** Ajuste fino del tamaño de la interfaz (1 = automático). */
+    val uiScale: Float = 1f,
 )
 
 /** Ajustes guardados en el móvil. */
@@ -44,6 +46,7 @@ class Prefs(context: Context) {
             .getOrDefault(NavApp.GOOGLE_MAPS),
         showWelcome = sp.getBoolean("welcome", true),
         glassBlur = sp.getBoolean("blur", true),
+        uiScale = sp.getFloat("uiScale", 1f),
     )
 
     fun update(change: (Settings) -> Settings) {
@@ -56,6 +59,7 @@ class Prefs(context: Context) {
             .putString("navApp", s.navApp.name)
             .putBoolean("welcome", s.showWelcome)
             .putBoolean("blur", s.glassBlur)
+            .putFloat("uiScale", s.uiScale)
             .apply()
         _settings.value = s
     }
