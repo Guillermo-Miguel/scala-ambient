@@ -1,6 +1,8 @@
 package es.scala.ambient.ui
 
 import android.graphics.Color as AColor
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
 import android.graphics.Paint
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -15,7 +17,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import es.scala.ambient.Place
 import es.scala.ambient.R
 import es.scala.ambient.nav.Route
-import org.osmdroid.tileprovider.tilesource.XYTileSource
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.CustomZoomButtonsController
@@ -25,16 +27,26 @@ import org.osmdroid.views.overlay.Polyline
 import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
 import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
 
-/** Mapa oscuro (OpenStreetMap con estilo Dark Matter de CARTO). */
-val DarkTiles = XYTileSource(
-    "CartoDarkMatter", 1, 19, 256, ".png",
-    arrayOf(
-        "https://a.basemaps.cartocdn.com/dark_all/",
-        "https://b.basemaps.cartocdn.com/dark_all/",
-        "https://c.basemaps.cartocdn.com/dark_all/",
-    ),
-    "© OpenStreetMap · © CARTO",
-)
+/**
+ * Mapa de OpenStreetMap (sin clave de API) pasado a blanco y negro e invertido,
+ * para que quede oscuro como el resto del sistema.
+ */
+private val DarkMapFilter: ColorMatrixColorFilter = run {
+    val m = ColorMatrix().apply { setSaturation(0f) }                     // blanco y negro
+    m.postConcat(ColorMatrix(floatArrayOf(                               // invertir
+        -1f, 0f, 0f, 0f, 255f,
+        0f, -1f, 0f, 0f, 255f,
+        0f, 0f, -1f, 0f, 255f,
+        0f, 0f, 0f, 1f, 0f,
+    )))
+    m.postConcat(ColorMatrix(floatArrayOf(                               // un poco más apagado
+        0.82f, 0f, 0f, 0f, 0f,
+        0f, 0.82f, 0f, 0f, 0f,
+        0f, 0f, 0.82f, 0f, 0f,
+        0f, 0f, 0f, 1f, 0f,
+    )))
+    ColorMatrixColorFilter(m)
+}
 
 /** Lo que el mapa necesita pintar. `recenter` cambia cuando hay que volver a encuadrar. */
 data class MapScene(
@@ -79,7 +91,10 @@ fun OsmMap(scene: MapScene, interactive: Boolean, modifier: Modifier = Modifier)
         modifier = modifier,
         factory = { ctx ->
             MapView(ctx).apply {
-                setTileSource(DarkTiles)
+                setTileSource(TileSourceFactory.MAPNIK)
+                overlayManager.tilesOverlay.setColorFilter(DarkMapFilter)
+                overlayManager.tilesOverlay.setLoadingBackgroundColor(AColor.BLACK)
+                overlayManager.tilesOverlay.setLoadingLineColor(AColor.rgb(20, 20, 22))
                 setMultiTouchControls(interactive)
                 isClickable = interactive
                 isTilesScaledToDpi = true

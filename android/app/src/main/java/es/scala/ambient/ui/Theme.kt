@@ -161,5 +161,8 @@ object Icons {
     val Pause = fillIcon("pause", "M6 4h4v16H6zM14 4h4v16h-4z")
     val Next = fillIcon("next", "M16 5h2v14h-2zM4 5v14l11-7z")
     val Prev = fillIcon("prev", "M6 5h2v14H6zM20 5v14L9 12z")
+    val MicOff = strokeIcon("micoff", "M9 9v2a3 3 0 0 0 5.1 2.1M15 9.3V5a3 3 0 0 0-5.9-.7", "M19 10v1a7 7 0 0 1-11.9 5M5 10v1a7 7 0 0 0 .6 2.8", "M12 18v4", "M3 3l18 18")
+    val Mic = strokeIcon("mic", "M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z", "M19 10v1a7 7 0 0 1-14 0v-1", "M12 18v4")
+    val Speaker = strokeIcon("speaker", "M11 5L6 9H2v6h4l5 4z", "M15.5 8.5a5 5 0 0 1 0 7", "M19 5a10 10 0 0 1 0 14")
     val Backspace = strokeIcon("bksp", "M21 5H8l-6 7 6 7h13z", "M12 9l6 6M18 9l-6 6")
 }

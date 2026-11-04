@@ -170,8 +170,7 @@ private fun MediaTile(modifier: Modifier, onOpen: (Dest) -> Unit) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Label("Música")
                 Text("Ver lo que suena en el móvil", color = Ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
-                Text("Hace falta el acceso a notificaciones para leer la canción y su carátula.", color = Quiet, fontSize = 14.sp)
-                PillButton("Dar acceso", primary = true) { context.startActivity(media.accessSettingsIntent()) }
+                Text("Toca para dar el acceso a notificaciones (te explico cómo).", color = Quiet, fontSize = 14.sp)
             }
             return@Glass
         }

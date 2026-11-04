@@ -2,12 +2,13 @@ package es.scala.ambient.ui
 
 import android.Manifest
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.os.Build
 import android.provider.ContactsContract
+import es.scala.ambient.telecom.CallManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
@@ -34,6 +35,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,13 +62,8 @@ data class Favorite(val name: String, val number: String, val photo: ImageBitmap
 
 private fun granted(c: Context, p: String) = ContextCompat.checkSelfPermission(c, p) == PackageManager.PERMISSION_GRANTED
 
-/** Llama directamente si hay permiso; si no, abre el marcador con el número puesto. */
-fun call(context: Context, number: String) {
-    if (number.isBlank()) return
-    val uri = Uri.parse("tel:" + Uri.encode(number))
-    val action = if (granted(context, Manifest.permission.CALL_PHONE)) Intent.ACTION_CALL else Intent.ACTION_DIAL
-    context.startActivity(Intent(action, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-}
+/** Llama: dentro de la app si es la de teléfono predeterminada; si no, con la del sistema. */
+fun call(context: Context, number: String) = CallManager.place(context, number)
 
 private suspend fun loadFavorites(context: Context): List<Favorite> = withContext(Dispatchers.IO) {
     val out = LinkedHashMap<String, Favorite>()
@@ -99,6 +96,15 @@ fun PhoneScreen(wide: Boolean) {
     var canRead by remember { mutableStateOf(granted(context, Manifest.permission.READ_CONTACTS)) }
     var favorites by remember { mutableStateOf<List<Favorite>?>(null) }
     var number by remember { mutableStateOf("") }
+    val dialRequest by CallManager.dialRequest.collectAsState()
+    LaunchedEffect(dialRequest) {
+        dialRequest?.let { number = it; CallManager.dialRequest.value = null }
+    }
+    var isDialer by remember { mutableStateOf(CallManager.isDefaultDialer(context)) }
+    val askRole = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        isDialer = CallManager.isDefaultDialer(context)
+    }
+    val askNotif = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
     val ask = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         canRead = granted(context, Manifest.permission.READ_CONTACTS)
@@ -107,6 +113,25 @@ fun PhoneScreen(wide: Boolean) {
 
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         ScreenHeader("Teléfono")
+
+        if (!isDialer) {
+            Glass(Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("Llamar sin salir de la app", color = Ink, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "Android solo deja gestionar las llamadas a la app de teléfono predeterminada. Al activarlo, las llamadas (también las entrantes) se verán aquí. Puedes volver a la de siempre en Ajustes del móvil.",
+                            color = Quiet, fontSize = 13.sp, lineHeight = 18.sp,
+                        )
+                    }
+                    PillButton("Activar", primary = true) {
+                        if (Build.VERSION.SDK_INT >= 33) askNotif.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        if (!canRead) ask.launch(arrayOf(Manifest.permission.READ_CONTACTS, Manifest.permission.CALL_PHONE))
+                        CallManager.requestDefaultDialerIntent(context)?.let { askRole.launch(it) }
+                    }
+                }
+            }
+        }
 
         val favs: @Composable (Modifier) -> Unit = { m ->
             Glass(m) {

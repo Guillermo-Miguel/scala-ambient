@@ -22,6 +22,10 @@
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
 
+    <!-- Llamadas dentro de la app: avisos de llamada entrante -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+
     <!-- Para abrir Google Maps / Waze / la app de música desde aquí -->
     <queries>
         <package android:name="com.google.android.apps.maps" />
@@ -44,12 +48,37 @@
             android:exported="true"
             android:screenOrientation="unspecified"
             android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
-            android:windowSoftInputMode="adjustResize">
+            android:windowSoftInputMode="adjustResize"
+            android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Necesario para poder ser la app de teléfono predeterminada -->
+            <intent-filter>
+                <action android:name="android.intent.action.DIAL" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.DIAL" />
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="tel" />
+            </intent-filter>
         </activity>
+
+        <!-- Llamadas: Android las entrega aquí cuando somos la app de teléfono -->
+        <service
+            android:name=".telecom.CallService"
+            android:exported="true"
+            android:permission="android.permission.BIND_INCALL_SERVICE">
+            <meta-data android:name="android.telecom.IN_CALL_SERVICE_UI" android:value="true" />
+            <intent-filter>
+                <action android:name="android.telecom.InCallService" />
+            </intent-filter>
+        </service>
+        <receiver android:name=".telecom.CallActionReceiver" android:exported="false" />
 
         <!-- Lee lo que suena en cualquier app de música (Spotify, YouTube Music…) -->
         <service

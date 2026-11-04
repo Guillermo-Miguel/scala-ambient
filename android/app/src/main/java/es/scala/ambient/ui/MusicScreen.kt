@@ -78,12 +78,7 @@ fun MusicScreen(wide: Boolean) {
             }
 
             if (!access) {
-                PermissionCard(
-                    "Permite ver lo que suena",
-                    "Android solo deja leer la canción, la carátula y los mandos de otras apps (Spotify, YouTube Music, Amazon Music…) si das a esta app el acceso a notificaciones. No se leen ni se guardan tus notificaciones.",
-                    "Abrir ajustes",
-                    Modifier.widthIn(max = 560.dp),
-                ) { context.startActivity(media.accessSettingsIntent()) }
+                MediaAccessCard(Modifier.widthIn(max = 640.dp))
                 return@Column
             }
 
@@ -179,6 +174,36 @@ private fun SeekBar(np: NowPlaying?) {
         Row(Modifier.fillMaxWidth()) {
             Text(formatMs(if (dragging) (dragValue * dur).toLong() else pos), color = Quiet, fontSize = 13.sp, modifier = Modifier.weight(1f))
             Text(if (dur > 0) formatMs(dur) else "", color = Quiet, fontSize = 13.sp)
+        }
+    }
+}
+
+/**
+ * Android 13+ bloquea el acceso a notificaciones en apps instaladas fuera de Play Store
+ * («Ajuste restringido»). Hay que permitirlo antes desde la ficha de la app.
+ */
+@Composable
+fun MediaAccessCard(modifier: Modifier = Modifier) {
+    val media = AmbientApp.instance.media
+    val context = LocalContext.current
+    Glass(modifier) {
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text("Permite ver lo que suena", color = Ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold)
+            Text(
+                "Para leer la canción, la carátula y los mandos de Spotify, YouTube Music, etc., la app necesita el acceso a notificaciones. No lee ni guarda tus notificaciones.",
+                color = Quiet, fontSize = 14.sp, lineHeight = 20.sp,
+            )
+            Text("Si al activarlo pone «Ajuste restringido»:", color = Ink, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            listOf(
+                "1. Pulsa «Abrir ficha de la app».",
+                "2. Toca el menú ⋮ arriba a la derecha.",
+                "3. Elige «Permitir ajustes restringidos» y confirma con tu huella o PIN.",
+                "4. Vuelve aquí y pulsa «Dar acceso».",
+            ).forEach { Text(it, color = Quiet, fontSize = 14.sp, lineHeight = 20.sp) }
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                PillButton("Dar acceso", primary = true) { context.startActivity(media.accessSettingsIntent()) }
+                PillButton("Abrir ficha de la app") { context.startActivity(media.appInfoIntent()) }
+            }
         }
     }
 }

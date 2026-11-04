@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import es.scala.ambient.AmbientApp
 import es.scala.ambient.Zone
 import es.scala.ambient.nav.NavModel
+import es.scala.ambient.telecom.CallManager
 
 enum class Dest(val label: String, val icon: ImageVector) {
     HOME("Inicio", Icons.Home),
@@ -72,6 +73,10 @@ fun AppRoot() {
     var welcomeDone by rememberSaveable { mutableStateOf(!settings.showWelcome) }
 
     LaunchedEffect(Unit) { NavModel.refreshWeather() }
+
+    val call by CallManager.ui.collectAsState()
+    val dialRequest by CallManager.dialRequest.collectAsState()
+    LaunchedEffect(dialRequest) { if (dialRequest != null) { dest = Dest.PHONE; welcomeDone = true } }
 
     // Reflejo de la luz ambiente detrás del cristal
     val dashColor by animateColorAsState(ambient.zone(Zone.DASH).rgb.rgb(), tween(900), label = "bgA")
@@ -123,8 +128,13 @@ fun AppRoot() {
             }
         }
 
-        AnimatedVisibility(!welcomeDone, enter = fadeIn(tween(200)), exit = fadeOut(tween(700))) {
+        AnimatedVisibility(!welcomeDone && call == null, enter = fadeIn(tween(200)), exit = fadeOut(tween(700))) {
             WelcomeScreen(onDone = { welcomeDone = true })
+        }
+
+        // Llamada en curso o entrante: ocupa toda la pantalla, dentro de la app
+        AnimatedVisibility(call != null, enter = fadeIn(tween(250)), exit = fadeOut(tween(400))) {
+            call?.let { CallScreen(it) }
         }
     }
 }

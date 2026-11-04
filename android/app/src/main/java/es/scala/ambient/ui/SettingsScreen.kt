@@ -117,7 +117,7 @@ fun SettingsScreen(wide: Boolean, onReplayWelcome: () -> Unit) {
 
             Section("Acerca de") {
                 Text(
-                    "Mapa © OpenStreetMap y CARTO. Búsqueda: Nominatim. Rutas: OSRM. Tiempo: Open-Meteo.",
+                    "Mapa © colaboradores de OpenStreetMap. Búsqueda: Nominatim. Rutas: OSRM. Tiempo: Open-Meteo.",
                     color = Quiet, fontSize = 13.sp, lineHeight = 18.sp,
                 )
             }

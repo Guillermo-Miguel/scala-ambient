@@ -77,6 +77,11 @@ class MediaRepo(private val context: Context) {
     fun hasNotificationAccess(): Boolean =
         NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.packageName)
 
+    /** Ficha de la app: ahí está el menú ⋮ → «Permitir ajustes restringidos». */
+    fun appInfoIntent(): Intent =
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + context.packageName))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+
     fun accessSettingsIntent(): Intent =
         Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
 
