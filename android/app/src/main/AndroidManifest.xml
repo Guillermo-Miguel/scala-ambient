@@ -27,6 +27,10 @@
 
     <!-- Llamadas dentro de la app: avisos de llamada entrante -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Apertura automática: al conectar con el coche o al encender -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
 
     <!-- Para abrir Google Maps / Waze / la app de música desde aquí -->
@@ -72,6 +76,12 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- Opcional: usarla como pantalla de inicio (en una pantalla fija en el coche) -->
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.HOME" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
             <!-- Necesario para poder ser la app de teléfono predeterminada -->
             <intent-filter>
                 <action android:name="android.intent.action.DIAL" />
@@ -97,6 +107,13 @@
             </intent-filter>
         </service>
         <receiver android:name=".telecom.CallActionReceiver" android:exported="false" />
+
+        <receiver android:name=".AutoStartReceiver" android:exported="true">
+            <intent-filter>
+                <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
 
         <service
             android:name=".nav.NavService"

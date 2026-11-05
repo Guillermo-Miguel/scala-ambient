@@ -1,6 +1,7 @@
 package es.scala.ambient.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -67,15 +68,18 @@ fun WeatherPanel(wide: Boolean, onClose: () -> Unit) {
     LaunchedEffect(Unit) { NavModel.refreshWeather(force = true) }
 
     Box(
-        Modifier.fillMaxSize().clip(RoundedCornerShape(30.dp)).background(Color.Black.copy(alpha = 0.72f))
+        Modifier.fillMaxSize().clip(RoundedCornerShape(30.dp)).background(Color.Black.copy(alpha = 0.85f))
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClickLabel = "Cerrar") { onClose() },
         contentAlignment = Alignment.Center,
     ) {
-        Glass(
+        Box(
             Modifier.fillMaxSize().padding(if (wide) 8.dp else 0.dp)
+                .clip(RoundedCornerShape(30.dp))
+                .background(Color(0xFA0E0E10))                       // fondo oscuro casi opaco
+                .border(1.dp, GlassEdge, RoundedCornerShape(30.dp))
                 // los toques dentro del panel no lo cierran
-                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
-            radius = 30.dp,
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {}
+                .padding(22.dp),
         ) {
             val weather = w
             if (weather == null) {
@@ -84,7 +88,7 @@ fun WeatherPanel(wide: Boolean, onClose: () -> Unit) {
                     Spacer(Modifier.height(16.dp))
                     PillButton("Cerrar", onClick = onClose)
                 }
-                return@Glass
+                return@Box
             }
             if (wide) {
                 Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(28.dp)) {

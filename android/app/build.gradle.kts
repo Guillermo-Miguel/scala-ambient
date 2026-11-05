@@ -43,8 +43,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 
-    // Mapa integrado (OpenStreetMap, sin clave de API)
-    implementation("org.osmdroid:osmdroid-android:6.1.20")
+    // Mapa vectorial nítido (MapLibre + estilo oscuro de OpenFreeMap, sin clave de API)
+    implementation("org.maplibre.gl:android-sdk:13.6.1")
 
     // Android Auto (Android for Cars App Library)
     implementation("androidx.car.app:app:1.4.0")

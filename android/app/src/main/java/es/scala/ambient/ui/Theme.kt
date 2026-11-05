@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -48,7 +49,7 @@ val Quiet = Color(0xFFEBEBF5).copy(alpha = 0.64f)
 val Faint = Color(0xFFEBEBF5).copy(alpha = 0.38f)
 val Red = Color(0xFFE4002B)
 val RedText = Color(0xFFFF4D5E)     // rojo legible para texto pequeño sobre negro
-val GlassFill = Color.White.copy(alpha = 0.055f)
+val GlassFill = Color.White.copy(alpha = 0.065f)
 val GlassEdge = Color.White.copy(alpha = 0.12f)
 
 fun Int.rgb() = Color(0xFF000000.toInt() or this)
@@ -65,9 +66,10 @@ fun Glass(
     val shape = RoundedCornerShape(radius)
     Box(
         modifier
-            .shadow(24.dp, shape, ambientColor = Color.Black, spotColor = Color.Black)
             .clip(shape)
             .background(GlassFill)
+            // brillo superior del cristal
+            .background(Brush.verticalGradient(listOf(Color.White.copy(alpha = 0.045f), Color.Transparent), endY = 220f))
             .border(BorderStroke(1.dp, GlassEdge), shape)
             .then(if (onClick != null) Modifier.clickable(role = Role.Button, onClick = onClick) else Modifier)
             .padding(padding),

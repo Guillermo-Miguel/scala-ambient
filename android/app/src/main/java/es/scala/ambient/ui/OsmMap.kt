@@ -1,55 +1,42 @@
 package es.scala.ambient.ui
 
-import android.graphics.Color as AColor
-import android.graphics.ColorMatrix
-import android.graphics.ColorMatrixColorFilter
-import android.graphics.Paint
-import android.view.MotionEvent
+import android.view.Gravity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import es.scala.ambient.AmbientApp
 import es.scala.ambient.Place
-import es.scala.ambient.R
 import es.scala.ambient.nav.Route
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
-import org.osmdroid.util.BoundingBox
-import org.osmdroid.util.GeoPoint
-import org.osmdroid.views.CustomZoomButtonsController
-import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.Marker
-import org.osmdroid.views.overlay.Overlay
-import org.osmdroid.views.overlay.Polyline
-import org.osmdroid.views.overlay.mylocation.GpsMyLocationProvider
-import org.osmdroid.views.overlay.mylocation.MyLocationNewOverlay
+import org.maplibre.android.camera.CameraPosition
+import org.maplibre.android.camera.CameraUpdateFactory
+import org.maplibre.android.geometry.LatLng
+import org.maplibre.android.geometry.LatLngBounds
+import org.maplibre.android.maps.MapLibreMap
+import org.maplibre.android.maps.MapView
+import org.maplibre.android.maps.Style
+import org.maplibre.android.style.layers.CircleLayer
+import org.maplibre.android.style.layers.Layer
+import org.maplibre.android.style.layers.LineLayer
+import org.maplibre.android.style.layers.Property
+import org.maplibre.android.style.layers.PropertyFactory
+import org.maplibre.android.style.sources.GeoJsonSource
+import org.maplibre.geojson.Feature
+import org.maplibre.geojson.FeatureCollection
+import org.maplibre.geojson.LineString
+import org.maplibre.geojson.Point
 
 /**
- * Mapa de OpenStreetMap (sin clave de API) pasado a blanco y negro e invertido,
- * para que quede oscuro como el resto del sistema.
+ * Mapa vectorial (MapLibre) con el estilo oscuro de OpenFreeMap: nítido a cualquier
+ * resolución y sin clave de API. Datos © OpenStreetMap.
  */
-private val DarkMapFilter: ColorMatrixColorFilter = run {
-    val m = ColorMatrix().apply { setSaturation(0f) }                     // blanco y negro
-    m.postConcat(ColorMatrix(floatArrayOf(                               // invertir
-        -1f, 0f, 0f, 0f, 255f,
-        0f, -1f, 0f, 0f, 255f,
-        0f, 0f, -1f, 0f, 255f,
-        0f, 0f, 0f, 1f, 0f,
-    )))
-    m.postConcat(ColorMatrix(floatArrayOf(                               // un poco más apagado
-        0.82f, 0f, 0f, 0f, 0f,
-        0f, 0.82f, 0f, 0f, 0f,
-        0f, 0f, 0.82f, 0f, 0f,
-        0f, 0f, 0f, 1f, 0f,
-    )))
-    ColorMatrixColorFilter(m)
-}
+private const val STYLE_URL = "https://tiles.openfreemap.org/styles/dark"
 
 /** Lo que el mapa necesita pintar. `recenter` cambia cuando hay que volver a encuadrar. */
 data class MapScene(
@@ -57,166 +44,196 @@ data class MapScene(
     val route: Route?,
     val recenter: Int,
     val centerOnMe: Boolean = false,
-    /** Navegando: seguir al coche con el mapa girado en el sentido de la marcha. */
+    /** Navegando: seguir al coche con el mapa girado e inclinado en el sentido de la marcha. */
     val nav: NavCamera? = null,
     /** El usuario ha movido el mapa con el dedo. */
     val onUserPan: (() -> Unit)? = null,
 )
 
+/** `zoom` en la escala de siempre (15–18 ≈ calle). */
 data class NavCamera(val lat: Double, val lon: Double, val bearing: Float, val zoom: Double, val follow: Boolean)
 
-/**
- * Última vista de cada mapa (el grande y el de Inicio). Al volver a una pantalla,
- * el mapa aparece directamente donde estaba, sin viajar desde otro sitio.
- */
+/** Última vista de cada mapa (el grande y el de Inicio): al volver, aparece donde estaba. */
 private object MapCamera {
-    val saved = HashMap<Boolean, Triple<Double, Double, Double>>()   // interactive → (lat, lon, zoom)
+    val saved = HashMap<Boolean, CameraPosition>()
 }
+
+/** MapLibre usa teselas de 512 px: un nivel menos de zoom para ver lo mismo que antes. */
+private fun z(level: Double) = level - 1.0
 
 class MapHandle {
     var view: MapView? = null
-    var me: MyLocationNewOverlay? = null
-    var line: Polyline? = null
-    var marker: Marker? = null
+    var map: MapLibreMap? = null
+    var style: Style? = null
+    var scene: MapScene? = null
+    var me: Pair<Double, Double>? = null
     var lastRecenter = -1
-    var onPan: (() -> Unit)? = null
-    var restored = false
+    var lastNavMove = 0L
+}
+
+private fun lineOf(points: List<Pair<Double, Double>>): FeatureCollection =
+    if (points.size < 2) FeatureCollection.fromFeatures(arrayOf<Feature>())
+    else FeatureCollection.fromFeature(Feature.fromGeometry(LineString.fromLngLats(points.map { Point.fromLngLat(it.second, it.first) })))
+
+private fun pointOf(p: Pair<Double, Double>?): FeatureCollection =
+    if (p == null) FeatureCollection.fromFeatures(arrayOf<Feature>())
+    else FeatureCollection.fromFeature(Feature.fromGeometry(Point.fromLngLat(p.second, p.first)))
+
+/** Añade la capa por debajo de los nombres de calles para que estos queden encima. */
+private fun Style.addBelowLabels(layer: Layer) {
+    runCatching { addLayerBelow(layer, "highway_name_other") }.onFailure { addLayer(layer) }
+}
+
+private fun setupStyle(style: Style) {
+    style.addSource(GeoJsonSource("route"))
+    style.addSource(GeoJsonSource("dest"))
+    style.addSource(GeoJsonSource("me"))
+    style.addBelowLabels(
+        LineLayer("route-casing", "route").withProperties(
+            PropertyFactory.lineColor("#000000"), PropertyFactory.lineOpacity(0.7f), PropertyFactory.lineWidth(13f),
+            PropertyFactory.lineCap(Property.LINE_CAP_ROUND), PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+        )
+    )
+    style.addBelowLabels(
+        LineLayer("route-line", "route").withProperties(
+            PropertyFactory.lineColor("#F5F5F7"), PropertyFactory.lineWidth(7f),
+            PropertyFactory.lineCap(Property.LINE_CAP_ROUND), PropertyFactory.lineJoin(Property.LINE_JOIN_ROUND),
+        )
+    )
+    style.addLayer(
+        CircleLayer("me-halo", "me").withProperties(
+            PropertyFactory.circleRadius(20f), PropertyFactory.circleColor("#E4002B"), PropertyFactory.circleOpacity(0.18f),
+        )
+    )
+    style.addLayer(
+        CircleLayer("me-dot", "me").withProperties(
+            PropertyFactory.circleRadius(7f), PropertyFactory.circleColor("#FFFFFF"),
+            PropertyFactory.circleStrokeColor("#E4002B"), PropertyFactory.circleStrokeWidth(3f),
+        )
+    )
+    style.addLayer(
+        CircleLayer("dest-dot", "dest").withProperties(
+            PropertyFactory.circleRadius(9f), PropertyFactory.circleColor("#E4002B"),
+            PropertyFactory.circleStrokeColor("#FFFFFF"), PropertyFactory.circleStrokeWidth(3f),
+        )
+    )
+}
+
+/** Pinta la escena y mueve la cámara si hace falta. */
+private fun apply(h: MapHandle) {
+    val map = h.map ?: return
+    val style = h.style ?: return
+    val scene = h.scene ?: return
+    val nav = scene.nav
+
+    style.getSourceAs<GeoJsonSource>("route")?.setGeoJson(lineOf(scene.route?.points.orEmpty()))
+    style.getSourceAs<GeoJsonSource>("dest")?.setGeoJson(pointOf(scene.destination?.let { it.lat to it.lon }))
+    // con el coche seguido se dibuja la flecha encima del mapa; si no, el punto de tu posición
+    style.getSourceAs<GeoJsonSource>("me")?.setGeoJson(pointOf(if (nav != null && nav.follow) null else h.me))
+
+    // navegación: seguir al coche, girado e inclinado
+    if (nav != null && nav.follow) {
+        val now = System.currentTimeMillis()
+        if (now - h.lastNavMove > 400) {
+            h.lastNavMove = now
+            map.easeCamera(
+                CameraUpdateFactory.newCameraPosition(
+                    CameraPosition.Builder().target(LatLng(nav.lat, nav.lon)).zoom(z(nav.zoom)).bearing(nav.bearing.toDouble()).tilt(45.0).build()
+                ),
+                900,
+            )
+        }
+        h.lastRecenter = scene.recenter
+        return
+    }
+
+    if (h.lastRecenter == -1) { h.lastRecenter = scene.recenter; return }      // primera vez: no mover
+    if (scene.recenter == h.lastRecenter) return
+    h.lastRecenter = scene.recenter
+
+    val me = h.me
+    val pts = scene.route?.points
+    when {
+        scene.centerOnMe && me != null -> map.animateCamera(
+            CameraUpdateFactory.newCameraPosition(CameraPosition.Builder().target(LatLng(me.first, me.second)).zoom(z(16.5)).bearing(0.0).tilt(0.0).build()), 700,
+        )
+        pts != null && pts.size > 1 -> {
+            val b = LatLngBounds.Builder().includes(pts.map { LatLng(it.first, it.second) }).build()
+            map.animateCamera(CameraUpdateFactory.newLatLngBounds(b, 140), 700)
+        }
+        scene.destination != null -> map.animateCamera(
+            CameraUpdateFactory.newCameraPosition(CameraPosition.Builder().target(LatLng(scene.destination.lat, scene.destination.lon)).zoom(z(15.5)).bearing(0.0).tilt(0.0).build()), 700,
+        )
+        me != null -> map.animateCamera(CameraUpdateFactory.newLatLngZoom(LatLng(me.first, me.second), z(15.5)), 700)
+    }
 }
 
 @Composable
 fun OsmMap(scene: MapScene, interactive: Boolean, modifier: Modifier = Modifier) {
-    val context = LocalContext.current
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val handle = remember { MapHandle() }
+    val here by AmbientApp.instance.location.location.collectAsState()
 
     DisposableEffect(lifecycle) {
         val obs = LifecycleEventObserver { _, e ->
             when (e) {
-                Lifecycle.Event.ON_RESUME -> { handle.view?.onResume(); handle.me?.enableMyLocation() }
-                Lifecycle.Event.ON_PAUSE -> { handle.view?.onPause(); handle.me?.disableMyLocation() }
+                Lifecycle.Event.ON_START -> handle.view?.onStart()
+                Lifecycle.Event.ON_RESUME -> handle.view?.onResume()
+                Lifecycle.Event.ON_PAUSE -> handle.view?.onPause()
+                Lifecycle.Event.ON_STOP -> handle.view?.onStop()
                 else -> {}
             }
         }
         lifecycle.addObserver(obs)
         onDispose {
-            handle.view?.let { v ->
-                MapCamera.saved[interactive] = Triple(v.mapCenter.latitude, v.mapCenter.longitude, v.zoomLevelDouble)
-            }
             lifecycle.removeObserver(obs)
-            handle.me?.disableMyLocation()
-            handle.view?.onDetach()
-            handle.view = null
+            handle.map?.let { MapCamera.saved[interactive] = CameraPosition.Builder(it.cameraPosition).tilt(0.0).bearing(0.0).build() }
+            handle.view?.apply { onPause(); onStop(); onDestroy() }
+            handle.view = null; handle.map = null; handle.style = null
         }
     }
 
     AndroidView(
         modifier = modifier,
         factory = { ctx ->
-            MapView(ctx).apply {
-                setTileSource(TileSourceFactory.MAPNIK)
-                overlayManager.tilesOverlay.setColorFilter(DarkMapFilter)
-                overlayManager.tilesOverlay.setLoadingBackgroundColor(AColor.BLACK)
-                overlayManager.tilesOverlay.setLoadingLineColor(AColor.rgb(20, 20, 22))
-                setMultiTouchControls(interactive)
-                isClickable = interactive
-                isTilesScaledToDpi = true
-                zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
-                setBackgroundColor(AColor.BLACK)
-                // empezar ya en el sitio correcto: la última vista, o tu posición, o (sin datos) Madrid
-                val saved = MapCamera.saved[interactive]
-                val here = AmbientApp.instance.location.location.value
-                handle.restored = saved != null || here != null
-                controller.setZoom(saved?.third ?: if (interactive) 15.5 else 13.5)
-                controller.setCenter(
-                    when {
-                        saved != null -> GeoPoint(saved.first, saved.second)
-                        here != null -> GeoPoint(here.latitude, here.longitude)
-                        else -> GeoPoint(40.4168, -3.7038)
+            MapView(ctx).also { mv ->
+                handle.view = mv
+                mv.onCreate(null)
+                mv.onStart()
+                mv.onResume()
+                mv.getMapAsync { map ->
+                    handle.map = map
+                    map.uiSettings.apply {
+                        setAllGesturesEnabled(interactive)
+                        isCompassEnabled = false
+                        isLogoEnabled = false
+                        isAttributionEnabled = true
+                        setAttributionTintColor(0x66FFFFFF)
+                        attributionGravity = Gravity.BOTTOM or Gravity.END
+                        setAttributionMargins(0, 0, 18, 12)
                     }
-                )
-                if (!interactive) setOnTouchListener { _, _ -> true }   // vista previa fija
-
-                val me = MyLocationNewOverlay(GpsMyLocationProvider(ctx), this).apply {
-                    enableMyLocation()
-                    // solo si no sabíamos dónde estabas: ir a tu posición en cuanto llegue el GPS
-                    runOnFirstFix { post { if (!handle.restored && handle.line == null) controller.setCenter(myLocation) } }
+                    // empezar ya en el sitio correcto: la última vista, o tu posición, o (sin datos) Madrid
+                    val loc = AmbientApp.instance.location.location.value
+                    map.cameraPosition = MapCamera.saved[interactive]
+                        ?: CameraPosition.Builder()
+                            .target(loc?.let { LatLng(it.latitude, it.longitude) } ?: LatLng(40.4168, -3.7038))
+                            .zoom(z(if (interactive) 15.5 else 13.5))
+                            .build()
+                    map.addOnCameraMoveStartedListener { reason ->
+                        if (reason == MapLibreMap.OnCameraMoveStartedListener.REASON_API_GESTURE) handle.scene?.onUserPan?.invoke()
+                    }
+                    map.setStyle(Style.Builder().fromUri(STYLE_URL)) { style ->
+                        setupStyle(style)
+                        handle.style = style
+                        apply(handle)
+                    }
                 }
-                overlays.add(me)
-                // detectar cuando mueves el mapa con el dedo (para dejar de seguir al coche)
-                overlays.add(object : Overlay() {
-                    override fun onTouchEvent(event: MotionEvent, mapView: MapView): Boolean {
-                        if (event.action == MotionEvent.ACTION_MOVE) handle.onPan?.invoke()
-                        return false
-                    }
-                })
-                handle.me = me
-                handle.view = this
-                onResume()
             }
         },
-        update = { map ->
-            // ruta
-            handle.line?.let { map.overlays.remove(it) }
-            handle.line = null
-            scene.route?.let { r ->
-                val pl = Polyline(map).apply {
-                    setPoints(r.points.map { GeoPoint(it.first, it.second) })
-                    outlinePaint.color = AColor.WHITE
-                    outlinePaint.strokeWidth = 11f
-                    outlinePaint.strokeCap = Paint.Cap.ROUND
-                    outlinePaint.strokeJoin = Paint.Join.ROUND
-                    outlinePaint.isAntiAlias = true
-                }
-                map.overlays.add(0, pl)
-                handle.line = pl
-            }
-            // destino
-            handle.marker?.let { map.overlays.remove(it) }
-            handle.marker = null
-            scene.destination?.let { d ->
-                val mk = Marker(map).apply {
-                    position = GeoPoint(d.lat, d.lon)
-                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                    icon = ContextCompat.getDrawable(context, R.drawable.ic_pin)
-                    title = d.name
-                    setInfoWindow(null)
-                }
-                map.overlays.add(mk)
-                handle.marker = mk
-            }
-            // navegación: el mapa sigue al coche y gira con él
-            handle.onPan = scene.onUserPan
-            val nav = scene.nav
-            handle.me?.isEnabled = nav == null || !nav.follow
-            if (nav != null && nav.follow) {
-                if (kotlin.math.abs(map.mapOrientation + nav.bearing) > 2f) map.mapOrientation = -nav.bearing
-                map.controller.animateTo(GeoPoint(nav.lat, nav.lon), nav.zoom, 900L)
-                handle.lastRecenter = scene.recenter
-                map.invalidate()
-                return@AndroidView
-            }
-            if (nav == null && map.mapOrientation != 0f) map.mapOrientation = 0f
-
-            // encuadre
-            if (handle.lastRecenter == -1) {
-                // primera vez: no mover la vista (ya empieza donde toca)
-                handle.lastRecenter = scene.recenter
-            } else if (scene.recenter != handle.lastRecenter) {
-                handle.lastRecenter = scene.recenter
-                val pts = scene.route?.points
-                val me = handle.me?.myLocation
-                if (scene.centerOnMe && me != null) {
-                    map.controller.animateTo(me, 16.5, 700L)
-                } else if (pts != null && pts.size > 1) {
-                    val box = BoundingBox.fromGeoPoints(pts.map { GeoPoint(it.first, it.second) })
-                    map.post { map.zoomToBoundingBox(box.increaseByScale(1.35f), true, 80) }
-                } else if (scene.destination != null) {
-                    map.controller.animateTo(GeoPoint(scene.destination.lat, scene.destination.lon), 15.5, 700L)
-                } else {
-                    handle.me?.myLocation?.let { map.controller.animateTo(it, 15.5, 700L) }
-                }
-            }
-            map.invalidate()
+        update = {
+            handle.scene = scene
+            handle.me = here?.let { it.latitude to it.longitude }
+            apply(handle)
         },
     )
 }

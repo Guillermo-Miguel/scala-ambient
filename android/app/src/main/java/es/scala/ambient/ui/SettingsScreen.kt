@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.Settings as AndroidSettings
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -125,6 +126,61 @@ fun SettingsScreen(wide: Boolean, onReplayWelcome: () -> Unit) {
                 PillButton("Restablecer (100 %)") { app.prefs.update { it.copy(uiScale = 1f) } }
             }
 
+            Section("Apertura automática") {
+                var overlayOk by remember { mutableStateOf(es.scala.ambient.AutoStart.canOpenFromBackground(context)) }
+                var showDevices by remember { mutableStateOf(false) }
+                val devices = remember(showDevices) { if (showDevices) es.scala.ambient.AutoStart.pairedDevices(context) else emptyList() }
+
+                Label("Abrir la app al conectar con el coche (Bluetooth)")
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(s.carBluetooth?.name ?: "Ninguno", color = Ink, fontSize = 16.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+                    PillButton(if (showDevices) "Cerrar" else "Elegir") { showDevices = !showDevices }
+                    if (s.carBluetooth != null) PillButton("Quitar") { app.prefs.update { it.copy(carBluetooth = null) } }
+                }
+                if (showDevices) {
+                    if (devices.isEmpty()) Text("No hay dispositivos emparejados (o falta el permiso de Bluetooth).", color = Quiet, fontSize = 13.sp)
+                    devices.forEach { d ->
+                        Row(
+                            Modifier.fillMaxWidth().clip(RoundedCornerShape(14.dp))
+                                .background(if (d.address == s.carBluetooth?.address) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.04f))
+                                .clickable(role = androidx.compose.ui.semantics.Role.Button) {
+                                    app.prefs.update { it.copy(carBluetooth = d) }; showDevices = false
+                                }
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                        ) {
+                            Text(d.name, color = Ink, fontSize = 15.sp, modifier = Modifier.weight(1f))
+                            Text(d.address, color = Faint, fontSize = 12.sp)
+                        }
+                    }
+                }
+                ToggleRow("Abrir al encender el dispositivo", s.openOnBoot) { v -> app.prefs.update { it.copy(openOnBoot = v) } }
+                PermRow("Abrirse sola (mostrar sobre otras apps)", overlayOk) {
+                    context.startActivity(es.scala.ambient.AutoStart.overlaySettingsIntent(context))
+                }
+                androidx.compose.runtime.LaunchedEffect(Unit) {
+                    while (true) { kotlinx.coroutines.delay(1500); overlayOk = es.scala.ambient.AutoStart.canOpenFromBackground(context) }
+                }
+                Text(
+                    "Sin ese permiso, Android no deja que una app se abra sola: en su lugar verás un aviso para abrirla con un toque.",
+                    color = Quiet, fontSize = 13.sp, lineHeight = 18.sp,
+                )
+                Spacer(Modifier.height(4.dp))
+                Label("Pantalla fija en el coche")
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    PillButton("Usar como pantalla de inicio") { context.startActivity(es.scala.ambient.AutoStart.homeSettingsIntent()) }
+                    Text(
+                        "Si esta pantalla es solo para el coche: la app será lo primero que veas al encenderla y al pulsar Inicio.",
+                        color = Quiet, fontSize = 13.sp, lineHeight = 18.sp, modifier = Modifier.weight(1f),
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                Label("Android Auto")
+                Text(
+                    "En la pantalla del coche, Scala Ambient aparece en el menú de Android Auto con los controles de luz. Android Auto no permite que una app se abra sola: para tenerla a mano, ponla la primera en Ajustes de Android Auto → Personalizar menú de aplicaciones.",
+                    color = Quiet, fontSize = 13.sp, lineHeight = 18.sp,
+                )
+            }
+
             Section("Navegación") {
                 Label("Navegador")
                 Segmented(NavApp.entries.map { it.label }, s.navApp.ordinal, Modifier.fillMaxWidth()) { i ->
@@ -151,7 +207,7 @@ fun SettingsScreen(wide: Boolean, onReplayWelcome: () -> Unit) {
 
             Section("Acerca de") {
                 Text(
-                    "Mapa © colaboradores de OpenStreetMap. Búsqueda: Nominatim. Rutas: OSRM. Tiempo: Open-Meteo.",
+                    "Mapa: OpenFreeMap · OpenMapTiles · © colaboradores de OpenStreetMap. Búsqueda: Nominatim. Rutas: OSRM. Tiempo: Open-Meteo.",
                     color = Quiet, fontSize = 13.sp, lineHeight = 18.sp,
                 )
             }

@@ -28,6 +28,10 @@ data class Settings(
     val glassBlur: Boolean = true,
     /** Ajuste fino del tamaño de la interfaz (1 = automático). */
     val uiScale: Float = 1f,
+    /** Abrir la app al conectarse a este Bluetooth (el del coche). */
+    val carBluetooth: PairedDevice? = null,
+    /** Abrir la app al encender el dispositivo. */
+    val openOnBoot: Boolean = false,
 )
 
 /** Ajustes guardados en el móvil. */
@@ -47,6 +51,8 @@ class Prefs(context: Context) {
         showWelcome = sp.getBoolean("welcome", true),
         glassBlur = sp.getBoolean("blur", true),
         uiScale = sp.getFloat("uiScale", 1f),
+        carBluetooth = sp.getString("carBtAddr", null)?.let { PairedDevice(sp.getString("carBtName", it) ?: it, it) },
+        openOnBoot = sp.getBoolean("openOnBoot", false),
     )
 
     fun update(change: (Settings) -> Settings) {
@@ -60,6 +66,9 @@ class Prefs(context: Context) {
             .putBoolean("welcome", s.showWelcome)
             .putBoolean("blur", s.glassBlur)
             .putFloat("uiScale", s.uiScale)
+            .putString("carBtAddr", s.carBluetooth?.address)
+            .putString("carBtName", s.carBluetooth?.name)
+            .putBoolean("openOnBoot", s.openOnBoot)
             .apply()
         _settings.value = s
     }
