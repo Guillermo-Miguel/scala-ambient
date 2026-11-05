@@ -9,12 +9,12 @@ val buildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
 
 android {
     namespace = "es.scala.ambient"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "es.scala.ambient"
         minSdk = 29
-        targetSdk = 35
+        targetSdk = 36
         // Sube sola en cada compilación de GitHub, para poder instalar encima de la anterior
         versionCode = 100 + buildNumber
         versionName = "1.$buildNumber"
@@ -66,9 +66,6 @@ dependencies {
 
     // Mapa vectorial nítido (MapLibre + estilo oscuro de OpenFreeMap, sin clave de API)
     implementation("org.maplibre.gl:android-sdk:13.6.1")
-
-    // Android Auto: las luces como «app de música» (lo único que Android Auto admite instalado fuera de Play)
-    implementation("androidx.media:media:1.7.0")
 
     // Android Auto (Android for Cars App Library)
     implementation("androidx.car.app:app:1.4.0")

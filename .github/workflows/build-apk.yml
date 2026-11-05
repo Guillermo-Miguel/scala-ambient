@@ -23,20 +23,26 @@ jobs:
         run: |
           echo "sdk.dir=$ANDROID_HOME" > local.properties
           chmod +x gradlew
-          ./gradlew --no-daemon --stacktrace assembleRelease
+          ./gradlew --no-daemon --stacktrace assembleRelease bundleRelease
 
       - name: Renombrar
-        run: cp android/app/build/outputs/apk/release/app-release.apk ScalaAmbient.apk
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk ScalaAmbient.apk
+          cp android/app/build/outputs/bundle/release/app-release.aab ScalaAmbient.aab
 
       - uses: actions/upload-artifact@v4
         with:
-          name: ScalaAmbient-apk
-          path: ScalaAmbient.apk
+          name: ScalaAmbient
+          path: |
+            ScalaAmbient.apk
+            ScalaAmbient.aab
 
       - name: Publicar en Releases
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ github.run_number }}
           name: Scala Ambient ${{ github.run_number }}
-          body: "APK lista para instalar en el móvil."
-          files: ScalaAmbient.apk
+          body: "ScalaAmbient.apk para instalar a mano · ScalaAmbient.aab para subir a Google Play."
+          files: |
+            ScalaAmbient.apk
+            ScalaAmbient.aab

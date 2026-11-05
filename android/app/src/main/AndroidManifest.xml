@@ -139,16 +139,6 @@
             android:name="androidx.car.app.minCarApiLevel"
             android:value="2" />
 
-        <!-- Android Auto: luces como app de música (funciona instalada fuera de Play Store) -->
-        <service
-            android:name=".car.LightsMediaService"
-            android:exported="true"
-            android:label="@string/app_name">
-            <intent-filter>
-                <action android:name="android.media.browse.MediaBrowserService" />
-            </intent-filter>
-        </service>
-
         <service
             android:name=".car.AmbientCarAppService"
             android:exported="true">
