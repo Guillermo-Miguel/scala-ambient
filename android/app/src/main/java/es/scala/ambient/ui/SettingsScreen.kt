@@ -206,6 +206,10 @@ fun SettingsScreen(wide: Boolean, onReplayWelcome: () -> Unit) {
             }
 
             Section("Acerca de") {
+                val version = remember {
+                    runCatching { context.packageManager.getPackageInfo(context.packageName, 0).versionName }.getOrNull() ?: "—"
+                }
+                InfoRow("Versión", version)
                 Text(
                     "Mapa: OpenFreeMap · OpenMapTiles · © colaboradores de OpenStreetMap. Búsqueda: Nominatim. Rutas: OSRM. Tiempo: Open-Meteo.",
                     color = Quiet, fontSize = 13.sp, lineHeight = 18.sp,

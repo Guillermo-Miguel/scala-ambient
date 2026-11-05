@@ -4,6 +4,9 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+/** Número de compilación de GitHub (1 en tu ordenador). */
+val buildNumber = System.getenv("GITHUB_RUN_NUMBER")?.toIntOrNull() ?: 1
+
 android {
     namespace = "es.scala.ambient"
     compileSdk = 35
@@ -12,15 +15,30 @@ android {
         applicationId = "es.scala.ambient"
         minSdk = 29
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        // Sube sola en cada compilación de GitHub, para poder instalar encima de la anterior
+        versionCode = 100 + buildNumber
+        versionName = "1.$buildNumber"
+    }
+
+    // Clave de firma fija: todas las versiones llevan la misma firma y se actualizan sin desinstalar.
+    // (Repositorio privado. Si lo haces público, cambia la clave y usa secretos de GitHub:
+    //  SIGNING_PASSWORD sustituye a la contraseña de abajo.)
+    signingConfigs {
+        create("release") {
+            storeFile = file("signing/scala-ambient.jks")
+            storePassword = System.getenv("SIGNING_PASSWORD") ?: "S8jyJRXSWOPmTpbp3sTVbInH"
+            keyAlias = "scala"
+            keyPassword = System.getenv("SIGNING_PASSWORD") ?: "S8jyJRXSWOPmTpbp3sTVbInH"
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
-            // Para uso personal se firma con la clave de depuración; así basta con "Build APK".
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
+        }
+        debug {
+            signingConfig = signingConfigs.getByName("release")
         }
     }
 
