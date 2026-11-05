@@ -1,5 +1,8 @@
 package es.scala.ambient.ui
 
+import android.app.Activity
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.os.Build
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -33,6 +36,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -49,6 +54,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.semantics.Role
@@ -81,6 +88,22 @@ fun AppRoot() {
     LaunchedEffect(Unit) { NavModel.refreshWeather() }
 
     val call by CallManager.ui.collectAsState()
+
+    // Durante una llamada, mantener la pantalla en horizontal si así la usas
+    // (al entrar una llamada con la pantalla bloqueada, Android tiende a girarla a vertical).
+    val activity = LocalContext.current as? Activity
+    val config = LocalConfiguration.current
+    SideEffect {
+        if (call == null) LastOrientation.landscape = config.orientation == Configuration.ORIENTATION_LANDSCAPE
+    }
+    val inCall = call != null
+    DisposableEffect(inCall) {
+        if (inCall && activity != null) {
+            val landscape = LastOrientation.landscape ?: (config.smallestScreenWidthDp >= 600)
+            if (landscape) activity.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+        }
+        onDispose { activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
+    }
     val dialRequest by CallManager.dialRequest.collectAsState()
     LaunchedEffect(dialRequest) { if (dialRequest != null) { dest = Dest.PHONE; welcomeDone = true } }
 
@@ -228,4 +251,9 @@ fun ScaledUi(userScale: Float, content: @Composable () -> Unit) {
         val scaled = Density(base.density * s, base.fontScale.coerceIn(0.85f, 1.15f))
         CompositionLocalProvider(LocalDensity provides scaled) { content() }
     }
+}
+
+/** Última orientación con la que usabas la app (fuera de llamadas). */
+private object LastOrientation {
+    var landscape: Boolean? = null
 }
