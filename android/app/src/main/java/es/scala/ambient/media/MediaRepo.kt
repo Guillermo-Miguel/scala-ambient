@@ -111,7 +111,8 @@ class MediaRepo(private val context: Context) {
         refresh()
     }
 
-    private fun pick(list: List<MediaController>) {
+    private fun pick(all: List<MediaController>) {
+        val list = all.filter { it.packageName != context.packageName }   // sin nuestra sesión de luces
         _sources.value = list.map { it.packageName }.distinct()
         val playing = list.firstOrNull { it.playbackState?.state == PlaybackState.STATE_PLAYING }
         val chosen = list.firstOrNull { it.packageName == pinnedPackage && pinnedPackage != null }
