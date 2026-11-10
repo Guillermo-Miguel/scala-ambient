@@ -35,7 +35,7 @@ import java.util.UUID
 enum class Link(val label: String) {
     NO_PERMISSION("Falta el permiso de Bluetooth"),
     BLUETOOTH_OFF("Bluetooth desactivado"),
-    SEARCHING("Buscando el Scala…"),
+    SEARCHING("Sin centralita · buscando"),
     CONNECTING("Conectando…"),
     CONNECTED("Conectado"),
 }
@@ -66,8 +66,16 @@ class AmbientBle(private val context: Context) {
     private val _link = MutableStateFlow(Link.SEARCHING)
     val link: StateFlow<Link> = _link
 
-    private val _state = MutableStateFlow(AmbientState())
+    // Los ajustes se guardan en el móvil: se puede usar todo sin la centralita y se le envían al conectarla.
+    private val saved = context.getSharedPreferences("ambient_state", Context.MODE_PRIVATE)
+    private val _state = MutableStateFlow(AmbientState.parse(saved.getString("state", "") ?: "") ?: AmbientState())
     val state: StateFlow<AmbientState> = _state
+
+    /** Hay cambios hechos sin centralita que aún no ha recibido. */
+    private var pending: Boolean = saved.getBoolean("pending", true)
+        set(v) { field = v; saved.edit().putBoolean("pending", v).apply() }
+
+    val connected: Boolean get() = _link.value == Link.CONNECTED
 
     private var gatt: BluetoothGatt? = null
     private var cmdChar: BluetoothGattCharacteristic? = null
@@ -78,6 +86,7 @@ class AmbientBle(private val context: Context) {
     private var pendingWrite: CompletableDeferred<Unit>? = null
 
     init {
+        scope.launch { _state.collect { saved.edit().putString("state", it.encode()).apply() } }
         scope.launch {
             for (cmd in queue) {
                 val g = gatt ?: continue
@@ -118,6 +127,7 @@ class AmbientBle(private val context: Context) {
     // ---------- Optimistic updates: la interfaz responde al momento y el ESP32 confirma después ----------
 
     fun send(cmd: String) {
+        if (!connected) pending = true
         _state.value = predict(_state.value, cmd)
         queue.trySend(cmd)
     }
@@ -125,6 +135,7 @@ class AmbientBle(private val context: Context) {
     private var brightJob: kotlinx.coroutines.Job? = null
     /** Para el deslizador: envía como mucho ~12 órdenes por segundo. */
     fun sendBrightness(mask: Int, value: Int) {
+        if (!connected) pending = true
         _state.value = predict(_state.value, Cmd.bright(mask, value))
         brightJob?.cancel()
         brightJob = scope.launch { delay(80); queue.trySend(Cmd.bright(mask, value)) }
@@ -219,7 +230,7 @@ class AmbientBle(private val context: Context) {
                 if (st != null) {
                     g.setCharacteristicNotification(st, true)
                     val d = st.getDescriptor(CCCD)
-                    if (d != null) {
+                    if (d == null) syncOnConnect(g) else {
                         if (Build.VERSION.SDK_INT >= 33) {
                             g.writeDescriptor(d, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
                         } else {
@@ -229,13 +240,13 @@ class AmbientBle(private val context: Context) {
                             g.writeDescriptor(d)
                         }
                     }
-                }
+                } else syncOnConnect(g)
                 _link.value = Link.CONNECTED
             }
         }
 
         override fun onDescriptorWrite(g: BluetoothGatt, d: BluetoothGattDescriptor, status: Int) {
-            main.post { g.getService(SERVICE)?.getCharacteristic(STATE)?.let { g.readCharacteristic(it) } }
+            main.post { syncOnConnect(g) }
         }
 
         override fun onCharacteristicWrite(g: BluetoothGatt, c: BluetoothGattCharacteristic, status: Int) {
@@ -258,6 +269,16 @@ class AmbientBle(private val context: Context) {
         @Deprecated("Deprecated in Java")
         override fun onCharacteristicRead(g: BluetoothGatt, c: BluetoothGattCharacteristic, status: Int) {
             @Suppress("DEPRECATION") c.value?.let { onValue(it) }
+        }
+    }
+
+    /** Al conectar: si configuraste las luces sin la centralita, se le envía tu configuración; si no, se lee la suya. */
+    private fun syncOnConnect(g: BluetoothGatt) {
+        if (pending) {
+            pending = false
+            _state.value.commands().forEach { queue.trySend(it) }
+        } else {
+            g.getService(SERVICE)?.getCharacteristic(STATE)?.let { g.readCharacteristic(it) }
         }
     }
 

@@ -77,6 +77,28 @@ data class AmbientState(
     fun swatchName(z: Zone): String =
         PALETTE.firstOrNull { it.rgb == zone(z).rgb }?.name ?: "Personalizado"
 
+    /** Mismo formato que envía el firmware (para guardarlo en el móvil). */
+    fun encode(): String = buildString {
+        append(if (on) "1" else "0"); append(' ')
+        append(effect.code); append(' ')
+        append(scene?.code ?: 0); append(' ')
+        append(speed); append(' ')
+        append(if (welcomeOnDoor) "1" else "0")
+        zones.forEach { append(" %06X%02X".format(it.rgb and 0xFFFFFF, it.bright.coerceIn(0, 100))) }
+    }
+
+    /** Órdenes que dejan la centralita exactamente así (al conectarla después de configurar sin ella). */
+    fun commands(): List<String> = buildList {
+        if (scene != null) add(Cmd.scene(scene))
+        else zones.forEachIndexed { i, z ->
+            add(Cmd.color(1 shl i, z.rgb)); add(Cmd.bright(1 shl i, z.bright))
+        }
+        add(Cmd.effect(effect))
+        add(Cmd.speed(speed))
+        add(Cmd.welcomeOnDoor(welcomeOnDoor))
+        add(Cmd.power(on))
+    }
+
     companion object {
         /**
          * Formato del firmware:

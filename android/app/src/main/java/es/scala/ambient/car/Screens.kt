@@ -10,7 +10,6 @@ import androidx.car.app.model.GridItem
 import androidx.car.app.model.GridTemplate
 import androidx.car.app.model.ItemList
 import androidx.car.app.model.ListTemplate
-import androidx.car.app.model.MessageTemplate
 import androidx.car.app.model.Row
 import androidx.car.app.model.Template
 import androidx.core.graphics.drawable.IconCompat
@@ -57,35 +56,19 @@ abstract class AmbientScreen(ctx: CarContext) : Screen(ctx) {
             .getContentLimit(ConstraintManager.CONTENT_LIMIT_TYPE_GRID)
     }.getOrDefault(6)
 
-    protected fun notReady(): Template? {
-        val link = ble.link.value
-        if (link == Link.CONNECTED) return null
-        // Nunca un círculo de carga infinito: si la centralita no aparece, se explica y se puede reintentar.
-        val msg = when (link) {
-            Link.NO_PERMISSION -> "Abre Scala Ambient en el móvil y permite el Bluetooth."
-            Link.BLUETOOTH_OFF -> "Activa el Bluetooth del móvil."
-            Link.CONNECTING -> "Conectando con la centralita de luces…"
-            else -> "Buscando la centralita de luces del Scala.\n" +
-                "Se conectará sola en cuanto esté instalada y encendida."
-        }
-        return MessageTemplate.Builder(msg)
-            .setTitle("Luz ambiente")
-            .setHeaderAction(Action.APP_ICON)
-            .setIcon(icon(R.drawable.ic_bulb, 0xE4002B))
-            .addAction(
-                Action.Builder()
-                    .setTitle("Reintentar")
-                    .setOnClickListener { ble.start(); invalidate() }
-                    .build()
-            )
-            .build()
+    /** Estado de la centralita en pocas palabras. Nunca bloquea: sin ella todo se puede ajustar igual. */
+    protected fun linkText(): String = when (ble.link.value) {
+        Link.CONNECTED -> "Conectada"
+        Link.CONNECTING -> "Conectando…"
+        Link.NO_PERMISSION -> "Permite el Bluetooth en el móvil"
+        Link.BLUETOOTH_OFF -> "Bluetooth del móvil apagado"
+        Link.SEARCHING -> "Sin conectar · se aplicará al conectarla"
     }
 }
 
 /** Inicio: encendido, cuatro escenas y ajustes. */
 class HomeScreen(ctx: CarContext) : AmbientScreen(ctx) {
     override fun onGetTemplate(): Template {
-        notReady()?.let { return it }
         val s = ble.state.value
         val lead = s.zone(ZoneGroup.ALL.lead)
         val items = ItemList.Builder()
@@ -118,7 +101,7 @@ class HomeScreen(ctx: CarContext) : AmbientScreen(ctx) {
         )
 
         return GridTemplate.Builder()
-            .setTitle("Luz ambiente · Scala")
+            .setTitle(if (ble.connected) "Luz ambiente · Scala" else "Luz ambiente · sin centralita")
             .setHeaderAction(Action.APP_ICON)
             .setSingleList(items.build())
             .build()
@@ -131,11 +114,16 @@ class SettingsScreen(ctx: CarContext) : AmbientScreen(ctx) {
     private val groups = listOf(ZoneGroup.ALL, ZoneGroup.DASH, ZoneGroup.DOORS)
 
     override fun onGetTemplate(): Template {
-        notReady()?.let { return it }
         val s = ble.state.value
         val lead = s.zone(group.lead)
         val list = ItemList.Builder()
 
+        list.addItem(
+            Row.Builder().setTitle("Centralita de luces").addText(linkText())
+                .setImage(icon(R.drawable.ic_bulb, if (ble.connected) 0x30D158 else 0x8E8E93))
+                .setOnClickListener { ble.start(); invalidate() }
+                .build()
+        )
         list.addItem(
             Row.Builder().setTitle("Zona: ${group.label}").addText("Toca para cambiar")
                 .setOnClickListener { group = groups[(groups.indexOf(group) + 1) % groups.size]; invalidate() }
@@ -164,6 +152,7 @@ class SettingsScreen(ctx: CarContext) : AmbientScreen(ctx) {
         )
         list.addItem(
             Row.Builder().setTitle("Probar bienvenida")
+                .addText(if (ble.connected) "En las luces del coche" else "Necesita la centralita")
                 .setOnClickListener { ble.send(Cmd.WELCOME) }
                 .build()
         )
@@ -178,7 +167,6 @@ class SettingsScreen(ctx: CarContext) : AmbientScreen(ctx) {
 
 class ColorScreen(ctx: CarContext, private val group: ZoneGroup) : AmbientScreen(ctx) {
     override fun onGetTemplate(): Template {
-        notReady()?.let { return it }
         val current = ble.state.value.zone(group.lead).rgb
         val items = ItemList.Builder()
         PALETTE.take(gridLimit()).forEach { sw ->
@@ -203,7 +191,6 @@ class BrightnessScreen(ctx: CarContext, private val group: ZoneGroup) : AmbientS
     private val steps = listOf(10, 25, 50, 75, 100)
 
     override fun onGetTemplate(): Template {
-        notReady()?.let { return it }
         val current = ble.state.value.zone(group.lead).bright
         val items = ItemList.Builder()
         steps.forEach { v ->

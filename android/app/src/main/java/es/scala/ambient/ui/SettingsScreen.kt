@@ -191,9 +191,16 @@ fun SettingsScreen(wide: Boolean, onReplayWelcome: () -> Unit) {
             }
 
             Section("Luz ambiente") {
-                InfoRow("Controlador", link.label)
+                InfoRow("Centralita", if (link == Link.CONNECTED) "Conectada" else link.label)
+                if (link != Link.CONNECTED) {
+                    Text(
+                        "Puedes configurar las luces ya, aquí y en Android Auto. Se guarda en el móvil y, " +
+                            "cuando instales la centralita, recibirá tu configuración sola al conectarse.",
+                        color = Quiet, fontSize = 13.sp, lineHeight = 18.sp,
+                    )
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    PillButton("Reconectar") { app.ble.start() }
+                    PillButton(if (link == Link.CONNECTED) "Reconectar" else "Buscar centralita") { app.ble.start() }
                 }
             }
 
