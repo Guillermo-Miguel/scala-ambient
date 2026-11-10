@@ -60,15 +60,24 @@ abstract class AmbientScreen(ctx: CarContext) : Screen(ctx) {
     protected fun notReady(): Template? {
         val link = ble.link.value
         if (link == Link.CONNECTED) return null
+        // Nunca un círculo de carga infinito: si la centralita no aparece, se explica y se puede reintentar.
         val msg = when (link) {
             Link.NO_PERMISSION -> "Abre Scala Ambient en el móvil y permite el Bluetooth."
             Link.BLUETOOTH_OFF -> "Activa el Bluetooth del móvil."
-            else -> link.label
+            Link.CONNECTING -> "Conectando con la centralita de luces…"
+            else -> "Buscando la centralita de luces del Scala.\n" +
+                "Se conectará sola en cuanto esté instalada y encendida."
         }
         return MessageTemplate.Builder(msg)
             .setTitle("Luz ambiente")
             .setHeaderAction(Action.APP_ICON)
-            .setLoading(link == Link.SEARCHING || link == Link.CONNECTING)
+            .setIcon(icon(R.drawable.ic_bulb, 0xE4002B))
+            .addAction(
+                Action.Builder()
+                    .setTitle("Reintentar")
+                    .setOnClickListener { ble.start(); invalidate() }
+                    .build()
+            )
             .build()
     }
 }
