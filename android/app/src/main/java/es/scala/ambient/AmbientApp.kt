@@ -15,6 +15,9 @@ class AmbientApp : Application() {
     lateinit var location: LocationRepo
         private set
 
+    /** Android Auto está mostrando la app en la pantalla del coche. */
+    @Volatile var carActive = false
+
     override fun onCreate() {
         super.onCreate()
         instance = this

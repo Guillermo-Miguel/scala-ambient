@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -98,6 +99,8 @@ fun NavScreen(wide: Boolean) {
     var searchJob by remember { mutableStateOf<Job?>(null) }
     var recenter by remember { mutableIntStateOf(0) }
     var onMe by remember { mutableStateOf(false) }
+    val carMode = LocalCarMode.current
+    var keyboard by remember { mutableStateOf(false) }
 
     fun search(now: Boolean) {
         searchJob?.cancel()
@@ -114,6 +117,7 @@ fun NavScreen(wide: Boolean) {
         NavModel.choose(p)
         results = emptyList()
         query = ""
+        keyboard = false
         focus.clearFocus()
         onMe = false
         recenter++
@@ -144,9 +148,16 @@ fun NavScreen(wide: Boolean) {
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.height(52.dp)) {
                     Icon(Icons.Search, null, tint = Quiet, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(12.dp))
-                    Box(Modifier.weight(1f)) {
+                    Box(
+                        Modifier.weight(1f).then(
+                            if (carMode) Modifier.fillMaxHeight().clickable { keyboard = true } else Modifier
+                        ),
+                        contentAlignment = Alignment.CenterStart,
+                    ) {
                         if (query.isEmpty()) Text("Buscar destino", color = Faint, fontSize = 17.sp)
-                        BasicTextField(
+                        if (carMode) {
+                            if (query.isNotEmpty() || keyboard) Text(query + if (keyboard) "|" else "", color = Ink, fontSize = 17.sp, maxLines = 1)
+                        } else BasicTextField(
                             value = query,
                             onValueChange = { query = it; search(false) },
                             singleLine = true,
@@ -245,6 +256,17 @@ fun NavScreen(wide: Boolean) {
                     }
                 }
             }
+        }
+
+        // ---- teclado (solo en el coche) ----
+        if (carMode && keyboard) {
+            CarKeyboard(
+                onKey = { query += it; search(false) },
+                onDelete = { query = query.dropLast(1); search(false) },
+                onSearch = { search(true); keyboard = false },
+                onClose = { keyboard = false },
+                modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp).widthIn(max = 760.dp).fillMaxWidth(),
+            )
         }
     }
 }

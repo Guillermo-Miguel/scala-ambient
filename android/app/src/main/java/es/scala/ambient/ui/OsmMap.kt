@@ -3,6 +3,7 @@ package es.scala.ambient.ui
 import android.view.Gravity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -173,6 +174,14 @@ fun OsmMap(scene: MapScene, interactive: Boolean, modifier: Modifier = Modifier)
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val handle = remember { MapHandle() }
     val here by AmbientApp.instance.location.location.collectAsState()
+
+    // en el coche: pellizcar o doble toque para acercar/alejar
+    val carMode = LocalCarMode.current
+    LaunchedEffect(carMode, interactive) {
+        if (carMode && interactive) es.scala.ambient.car.CarBus.zoom.collect { f ->
+            if (f > 0f) handle.map?.animateCamera(CameraUpdateFactory.zoomBy(kotlin.math.log2(f.toDouble())), 250)
+        }
+    }
 
     DisposableEffect(lifecycle) {
         val obs = LifecycleEventObserver { _, e ->

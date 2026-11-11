@@ -73,6 +73,6 @@ class MainActivity : ComponentActivity() {
     override fun onStop() {
         super.onStop()
         // la posición solo hace falta con la app a la vista (ahorra batería)
-        if (!isChangingConfigurations) app.location.stop()
+        if (!isChangingConfigurations && !app.carActive) app.location.stop()
     }
 }

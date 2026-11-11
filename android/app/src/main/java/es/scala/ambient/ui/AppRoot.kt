@@ -78,7 +78,7 @@ enum class Dest(val label: String, val icon: ImageVector) {
 }
 
 @Composable
-fun AppRoot() {
+fun AppRoot(carMode: Boolean = false) {
     val app = AmbientApp.instance
     val settings by app.prefs.settings.collectAsState()
     val ambient by app.ble.state.collectAsState()
@@ -91,10 +91,10 @@ fun AppRoot() {
 
     // Durante una llamada, mantener la pantalla en horizontal si así la usas
     // (al entrar una llamada con la pantalla bloqueada, Android tiende a girarla a vertical).
-    val activity = LocalContext.current as? Activity
+    val activity = if (carMode) null else LocalContext.current as? Activity
     val config = LocalConfiguration.current
     SideEffect {
-        if (call == null) LastOrientation.landscape = config.orientation == Configuration.ORIENTATION_LANDSCAPE
+        if (call == null && !carMode) LastOrientation.landscape = config.orientation == Configuration.ORIENTATION_LANDSCAPE
     }
     val inCall = call != null
     DisposableEffect(inCall) {
@@ -105,6 +105,11 @@ fun AppRoot() {
         onDispose { activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
     }
     val dialRequest by CallManager.dialRequest.collectAsState()
+    // botón «Inicio» de la barra de Android Auto
+    if (carMode) {
+        val homeTaps by es.scala.ambient.car.CarBus.home.collectAsState()
+        LaunchedEffect(homeTaps) { if (homeTaps > 0) dest = Dest.HOME }
+    }
     LaunchedEffect(dialRequest) { if (dialRequest != null) { dest = Dest.PHONE; welcomeDone = true } }
 
     // Reflejo de la luz ambiente detrás del cristal
@@ -144,7 +149,7 @@ fun AppRoot() {
 
             BoxWithConstraints(Modifier.fillMaxSize().systemBarsPadding().padding(16.dp)) {
                 // horizontal (coche, tablet) → menú lateral; vertical (móvil) → barra abajo
-            val wide = maxWidth > maxHeight || maxWidth >= 720.dp
+            val wide = carMode || maxWidth > maxHeight || maxWidth >= 720.dp
                 val content: @Composable (Modifier) -> Unit = { m ->
                     AnimatedContent(
                         targetState = dest,
