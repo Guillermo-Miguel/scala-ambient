@@ -155,7 +155,7 @@ private fun Contact(ui: CallUi, status: String, typed: String, avatar: androidx.
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(ui.title, color = Ink, fontSize = 34.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
-            if (ui.name != null) Text(ui.number, color = Quiet, fontSize = 16.sp)
+            if (ui.name != null && ui.number.isNotBlank()) Text(ui.number, color = Quiet, fontSize = 16.sp)
             Text(status, color = if (ui.phase == CallPhase.ENDED) RedText else Quiet, fontSize = 18.sp)
             ui.hint?.let { Text(it, color = RedText, fontSize = 14.sp, textAlign = TextAlign.Center) }
             if (typed.isNotEmpty()) Text(typed, color = Ink, fontSize = 22.sp, fontWeight = FontWeight.Light, maxLines = 1)
