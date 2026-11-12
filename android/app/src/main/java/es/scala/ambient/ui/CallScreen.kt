@@ -71,12 +71,12 @@ fun CallScreen(ui: CallUi) {
     var typed by remember { mutableStateOf("") }
 
     val status = when (ui.phase) {
-        CallPhase.RINGING -> "Llamada entrante"
+        CallPhase.RINGING -> if (ui.external) "Suena el teléfono" else "Llamada entrante"
         CallPhase.DIALING -> "Llamando…"
         CallPhase.HOLDING -> "En espera"
         CallPhase.ENDED -> "Llamada finalizada"
         CallPhase.PICK_SIM -> "Elige la línea"
-        CallPhase.ACTIVE -> if (tick < 0 || ui.connectedAt == 0L) "En llamada"
+        CallPhase.ACTIVE -> if (tick < 0 || ui.connectedAt == 0L) (if (ui.external && !ui.incoming) "Llamando · en llamada" else "En llamada")
         else formatMs(SystemClock.elapsedRealtime() - ui.connectedAt)
     }
 
@@ -109,7 +109,7 @@ fun CallScreen(ui: CallUi) {
                 Box(Modifier.width(1.dp).fillMaxHeight(0.7f).background(GlassEdge))
                 // mandos
                 Column(
-                    Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()),
+                    Modifier.weight(1f).fillMaxHeight().carDrag().verticalScroll(rememberScrollState()),
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.Center,
                 ) {
@@ -118,7 +118,7 @@ fun CallScreen(ui: CallUi) {
             }
         } else {
             Column(
-                Modifier.fillMaxSize().systemBarsPadding().padding(24.dp).verticalScroll(rememberScrollState()),
+                Modifier.fillMaxSize().systemBarsPadding().padding(24.dp).carDrag().verticalScroll(rememberScrollState()),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(18.dp, Alignment.CenterVertically),
             ) {
@@ -157,6 +157,7 @@ private fun Contact(ui: CallUi, status: String, typed: String, avatar: androidx.
             Text(ui.title, color = Ink, fontSize = 34.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, textAlign = TextAlign.Center)
             if (ui.name != null) Text(ui.number, color = Quiet, fontSize = 16.sp)
             Text(status, color = if (ui.phase == CallPhase.ENDED) RedText else Quiet, fontSize = 18.sp)
+            ui.hint?.let { Text(it, color = RedText, fontSize = 14.sp, textAlign = TextAlign.Center) }
             if (typed.isNotEmpty()) Text(typed, color = Ink, fontSize = 22.sp, fontWeight = FontWeight.Light, maxLines = 1)
         }
     }
@@ -179,7 +180,11 @@ private fun Controls(ui: CallUi, keypad: Boolean, onKeypad: () -> Unit, onKey: (
 
         CallPhase.ENDED -> Spacer(Modifier.height(96.dp))
 
-        else -> Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(22.dp)) {
+        // llamada que lleva el sistema (Android Auto): solo colgar
+        else -> if (ui.external) {
+            BigCallButton(Icons.Phone, "Colgar", Red, rotate = 135f) { CallManager.hangUp() }
+        } else Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(22.dp)) {
+
             // el teclado ocupa el sitio de los botones para que quepa en pantallas bajas
             AnimatedContent(keypad, transitionSpec = { fadeIn(tween(200)) togetherWith fadeOut(tween(150)) }, label = "keypad") { showPad ->
                 if (showPad) {

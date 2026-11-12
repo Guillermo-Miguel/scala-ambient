@@ -47,6 +47,14 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     buildFeatures { compose = true }
+
+    // Capturas automáticas de la interfaz a tamaño de pantalla de coche (se generan en GitHub)
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+            all { it.systemProperty("roborazzi.test.record", "true") }
+        }
+    }
 }
 
 kotlin {
@@ -70,4 +78,13 @@ dependencies {
     // Android Auto (Android for Cars App Library)
     implementation("androidx.car.app:app:1.4.0")
     implementation("androidx.car.app:app-projected:1.4.0")
+
+    // Solo para las capturas de prueba
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.14.1")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.43.0")
+    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.43.0")
+    testImplementation("androidx.test:core:1.6.1")
+    testImplementation("androidx.test.espresso:espresso-core:3.6.1")
+    testImplementation("androidx.compose.ui:ui-test-junit4")
 }

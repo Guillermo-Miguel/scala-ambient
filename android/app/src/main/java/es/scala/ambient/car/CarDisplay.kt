@@ -37,7 +37,9 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import es.scala.ambient.MainActivity
 import es.scala.ambient.R
 import es.scala.ambient.ui.AppRoot
+import es.scala.ambient.ui.CarDragTargets
 import es.scala.ambient.ui.LocalCarMode
+import androidx.compose.ui.geometry.Offset
 
 /**
  * Dibuja la interfaz completa de la app (la misma del móvil) en la pantalla del coche.
@@ -95,6 +97,8 @@ class CarDisplay(private val car: CarContext) : SurfaceCallback {
     override fun onClick(x: Float, y: Float) {
         finishDrag()
         val t = SystemClock.uptimeMillis()
+        CarDragTargets.lastTap = Offset(x, y)
+        CarDragTargets.lastTapAt = t
         touch(MotionEvent.ACTION_DOWN, x, y, t)
         main.postDelayed({ touch(MotionEvent.ACTION_UP, x, y, t) }, 60)
     }
@@ -105,12 +109,16 @@ class CarDisplay(private val car: CarContext) : SurfaceCallback {
     private var dragY = 0f
     private val endDrag = Runnable { finishDrag() }
 
-    /** Arrastrar: Android Auto solo dice cuánto se ha movido el dedo, así que el gesto empieza en el centro. */
+    /**
+     * Arrastrar: Android Auto solo dice cuánto se ha movido el dedo, no dónde está.
+     * El gesto se aplica sobre la lista o el mapa que hay en pantalla (o el último que tocaste).
+     */
     override fun onScroll(distanceX: Float, distanceY: Float) {
         if (!dragging) {
-            dragging = true
             dragTime = SystemClock.uptimeMillis()
-            dragX = width / 2f; dragY = height / 2f
+            val start = CarDragTargets.pick(distanceX, distanceY, dragTime) ?: Offset(width / 2f, height / 2f)
+            dragging = true
+            dragX = start.x; dragY = start.y
             touch(MotionEvent.ACTION_DOWN, dragX, dragY, dragTime)
         }
         dragX -= distanceX; dragY -= distanceY
@@ -142,6 +150,7 @@ private class CarPresentation(ctx: Context, display: Display) :
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         owner.create()
+        window!!.addFlags(android.view.WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)
         val decor = window!!.decorView
         decor.setViewTreeLifecycleOwner(owner)
         decor.setViewTreeSavedStateRegistryOwner(owner)
@@ -149,7 +158,6 @@ private class CarPresentation(ctx: Context, display: Display) :
         val view = ComposeView(context).apply {
             setContent {
                 CompositionLocalProvider(
-                    LocalCarMode provides true,
                     LocalActivityResultRegistryOwner provides owner,
                     LocalOnBackPressedDispatcherOwner provides owner,
                 ) { AppRoot(carMode = true) }

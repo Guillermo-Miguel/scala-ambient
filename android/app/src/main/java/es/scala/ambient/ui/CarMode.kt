@@ -13,6 +13,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -25,6 +31,40 @@ import androidx.compose.ui.unit.sp
 
 /** true cuando la interfaz se dibuja en la pantalla del coche (Android Auto). */
 val LocalCarMode = staticCompositionLocalOf { false }
+
+/**
+ * Zonas que se pueden arrastrar en el coche. Android Auto solo dice cuánto se mueve el dedo, no dónde está,
+ * así que cada lista o mapa se apunta aquí y el gesto se aplica sobre la que toca.
+ */
+object CarDragTargets {
+    class Target(val vertical: Boolean, val horizontal: Boolean) { var bounds: Rect = Rect.Zero }
+
+    val list = ArrayList<Target>()
+    var lastTap: Offset? = null
+    var lastTapAt = 0L
+
+    /** Punto donde empezar el arrastre: la zona que tocaste hace poco o, si no, la que está encima. */
+    fun pick(dx: Float, dy: Float, now: Long): Offset? {
+        val vertical = kotlin.math.abs(dy) >= kotlin.math.abs(dx)
+        val candidates = list.filter { it.bounds.width > 8f && it.bounds.height > 8f && (if (vertical) it.vertical else it.horizontal) }
+        if (candidates.isEmpty()) return null
+        val tap = lastTap?.takeIf { now - lastTapAt < 15_000 }
+        val t = tap?.let { p -> candidates.lastOrNull { it.bounds.contains(p) } } ?: candidates.last()
+        return t.bounds.center
+    }
+}
+
+/** Marca una lista (o el mapa) como arrastrable desde la pantalla del coche. */
+@Composable
+fun Modifier.carDrag(vertical: Boolean = true, horizontal: Boolean = false): Modifier {
+    if (!LocalCarMode.current) return this
+    val t = remember { CarDragTargets.Target(vertical, horizontal) }
+    DisposableEffect(t) {
+        CarDragTargets.list.add(t)
+        onDispose { CarDragTargets.list.remove(t) }
+    }
+    return this.onGloballyPositioned { t.bounds = it.boundsInWindow() }
+}
 
 /** Teclado propio para el coche: Android Auto no muestra el teclado del móvil. */
 @Composable

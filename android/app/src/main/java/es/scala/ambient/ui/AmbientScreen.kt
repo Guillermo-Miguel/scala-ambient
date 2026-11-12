@@ -16,6 +16,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -96,12 +97,17 @@ fun AmbientScreen(wide: Boolean) {
                 Cabin(state, group, { group = it }, Modifier.weight(1f).fillMaxWidth().padding(vertical = 12.dp))
                 Label("Toca el salpicadero o una puerta para editarla", Modifier.padding(start = 6.dp))
             }
-            Glass(Modifier.width(480.dp).fillMaxHeight()) {
-                Column(Modifier.verticalScroll(rememberScrollState())) { Controls(state, group) { group = it } }
+            // en el coche el panel ocupa algo más de la mitad, y todo él se desliza
+            val car = LocalCarMode.current
+            Glass(
+                (if (car) Modifier.weight(1.35f) else Modifier.width(480.dp)).fillMaxHeight(),
+                padding = PaddingValues(if (car) 16.dp else 22.dp),
+            ) {
+                Column(Modifier.fillMaxSize().carDrag().verticalScroll(rememberScrollState())) { Controls(state, group) { group = it } }
             }
         }
     } else {
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(Modifier.fillMaxSize().carDrag().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             ScreenHeader("Luz", trailing = trailing)
             Text(link.label, color = if (link == Link.CONNECTED) Ink else RedText, fontSize = 13.sp, modifier = Modifier.padding(start = 6.dp))
             Cabin(state, group, { group = it }, Modifier.fillMaxWidth().height(420.dp))
@@ -158,7 +164,10 @@ private fun previewColor(effect: Effect, z: Zone, base: Color, t: Float, sp: Flo
 @Composable
 private fun Cabin(state: AmbientState, group: ZoneGroup, onPick: (ZoneGroup) -> Unit, modifier: Modifier) {
     // reloj de animación en segundos
-    val t by produceState(0f) {
+    // solo corre mientras hay un efecto animado encendido (si no, redibujaría sin parar para nada)
+    val running = state.on && state.effect != Effect.FIXED
+    val t by produceState(0f, running) {
+        if (!running) return@produceState
         val start = withInfiniteAnimationFrameMillis { it }
         while (true) withInfiniteAnimationFrameMillis { value = (it - start) / 1000f }
     }
@@ -216,13 +225,15 @@ private fun Controls(state: AmbientState, group: ZoneGroup, onGroup: (ZoneGroup)
         // Escenas
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Label("Escenas")
+            // en el coche, de dos en dos para que los nombres quepan
+            Scene.entries.chunked(if (LocalCarMode.current) 2 else 4).forEach { sceneRow ->
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Scene.entries.forEach { s ->
+                sceneRow.forEach { s ->
                     val on = state.scene == s
                     val bg by animateColorAsState(if (on) Color.White.copy(alpha = 0.12f) else Color.White.copy(alpha = 0.035f), tween(350), label = "sc")
                     val edge by animateColorAsState(if (on) Red else Color.White.copy(alpha = 0.08f), tween(350), label = "sce")
                     Column(
-                        Modifier.weight(1f).height(88.dp).clip(RoundedCornerShape(20.dp)).background(bg)
+                        Modifier.weight(1f).height(if (LocalCarMode.current) 72.dp else 88.dp).clip(RoundedCornerShape(20.dp)).background(bg)
                             .border(1.dp, edge, RoundedCornerShape(20.dp))
                             .clickable(role = Role.Button) { ble.send(Cmd.scene(s)) }.padding(12.dp),
                         verticalArrangement = Arrangement.SpaceBetween,
@@ -238,6 +249,7 @@ private fun Controls(state: AmbientState, group: ZoneGroup, onGroup: (ZoneGroup)
                         Text(s.label, color = Ink, fontSize = 13.sp, fontWeight = FontWeight.Medium, maxLines = 1)
                     }
                 }
+            }
             }
         }
 

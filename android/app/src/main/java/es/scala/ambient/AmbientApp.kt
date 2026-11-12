@@ -27,7 +27,7 @@ class AmbientApp : Application() {
         location = LocationRepo(this)
 
         // Mapa: MapLibre (vectorial, sin clave)
-        MapLibre.getInstance(this)
+        try { MapLibre.getInstance(this) } catch (_: Throwable) { }
     }
 
     companion object {

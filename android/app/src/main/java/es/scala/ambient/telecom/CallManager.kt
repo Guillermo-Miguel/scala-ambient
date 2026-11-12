@@ -39,6 +39,9 @@ data class CallUi(
     val muted: Boolean,
     val speaker: Boolean,
     val sims: List<SimChoice> = emptyList(),
+    /** Llamada que lleva el sistema (en Android Auto): solo se puede contestar y colgar. */
+    val external: Boolean = false,
+    val hint: String? = null,
 ) {
     val title: String get() = name ?: number.ifBlank { "Número oculto" }
 }
@@ -79,6 +82,8 @@ object CallManager {
     @SuppressLint("MissingPermission")
     fun place(context: Context, number: String) {
         if (number.isBlank()) return
+        lastDialed = number
+        lastDialedAt = SystemClock.elapsedRealtime()
         val uri = Uri.fromParts("tel", number, null)
         val canCall = ContextCompat.checkSelfPermission(context, Manifest.permission.CALL_PHONE) == PackageManager.PERMISSION_GRANTED
         if (canCall && isDefaultDialer(context)) {
@@ -183,13 +188,101 @@ object CallManager {
         }.getOrNull()
     }
 
+    // ---------- Llamadas que lleva el sistema (Android Auto) ----------
+    // Con el móvil conectado al coche, Android entrega las llamadas a Android Auto y no a esta app.
+    // Se detectan por el estado del audio del teléfono y se cuelgan o contestan a través del sistema.
+
+    private var lastDialed: String? = null
+    private var lastDialedAt = 0L
+    private var watchJob: kotlinx.coroutines.Job? = null
+    private var appContext: Context? = null
+
+    fun watchSystemCalls(context: Context) {
+        val app = context.applicationContext
+        appContext = app
+        if (watchJob?.isActive == true) return
+        val audio = app.getSystemService(android.media.AudioManager::class.java)
+        watchJob = scope.launch {
+            var last = android.media.AudioManager.MODE_NORMAL
+            while (true) {
+                val mode = runCatching { audio.mode }.getOrDefault(android.media.AudioManager.MODE_NORMAL)
+                if (call == null && mode != last) onSystemMode(app, mode)
+                last = mode
+                delay(400)
+            }
+        }
+    }
+
+    fun stopWatchingSystemCalls() {
+        watchJob?.cancel(); watchJob = null
+        if (_ui.value?.external == true) _ui.value = null
+    }
+
+    private fun onSystemMode(context: Context, mode: Int) {
+        when (mode) {
+            android.media.AudioManager.MODE_RINGTONE -> {
+                _ui.value = CallUi(
+                    number = "", name = "Llamada entrante", phase = CallPhase.RINGING, incoming = true,
+                    connectedAt = 0L, muted = false, speaker = false, external = true,
+                )
+            }
+            android.media.AudioManager.MODE_IN_CALL -> {
+                val prev = _ui.value?.takeIf { it.external }
+                val mine = lastDialed?.takeIf { SystemClock.elapsedRealtime() - lastDialedAt < 60_000 }
+                val number = if (prev?.incoming == true) "" else mine ?: ""
+                _ui.value = CallUi(
+                    number = number,
+                    name = if (prev?.incoming == true) "Llamada" else if (number.isBlank()) "Llamada" else null,
+                    phase = CallPhase.ACTIVE, incoming = prev?.incoming == true,
+                    connectedAt = if (prev?.incoming == true) SystemClock.elapsedRealtime() else 0L,
+                    muted = false, speaker = false, external = true,
+                )
+                if (number.isNotBlank()) scope.launch {
+                    val n = withContext(Dispatchers.IO) { lookupName(context, number) }
+                    val cur = _ui.value
+                    if (n != null && cur != null && cur.external && cur.number == number) _ui.value = cur.copy(name = n)
+                }
+            }
+            else -> {
+                val cur = _ui.value?.takeIf { it.external } ?: return
+                _ui.value = cur.copy(phase = CallPhase.ENDED, hint = null)
+                scope.launch {
+                    delay(1500)
+                    if (_ui.value?.external == true && _ui.value?.phase == CallPhase.ENDED) _ui.value = null
+                }
+            }
+        }
+    }
+
+    /** Contestar o colgar a través del sistema (permiso «Teléfono»). */
+    @SuppressLint("MissingPermission")
+    @Suppress("DEPRECATION")
+    private fun system(accept: Boolean) {
+        val ctx = appContext ?: return
+        val ok = ContextCompat.checkSelfPermission(ctx, Manifest.permission.ANSWER_PHONE_CALLS) == PackageManager.PERMISSION_GRANTED
+        val done = ok && runCatching {
+            val tm = ctx.getSystemService(TelecomManager::class.java)
+            if (accept) { tm.acceptRingingCall(); true } else tm.endCall()
+        }.getOrDefault(false)
+        if (!done) _ui.value = _ui.value?.copy(
+            hint = if (ok) "No se ha podido. Usa el botón del volante." else "Abre Scala Ambient en el móvil una vez para permitir colgar desde aquí.",
+        )
+    }
+
     // ---------- Mandos ----------
 
-    fun answer() { call?.answer(VideoProfile.STATE_AUDIO_ONLY) }
+    fun answer() {
+        if (_ui.value?.external == true) { system(accept = true); return }
+        call?.answer(VideoProfile.STATE_AUDIO_ONLY)
+    }
 
-    fun reject() { call?.reject(false, null) }
+    fun reject() {
+        if (_ui.value?.external == true) { system(accept = false); return }
+        call?.reject(false, null)
+    }
 
     fun hangUp() {
+        if (_ui.value?.external == true) { system(accept = false); return }
         val c = call ?: return
         if (stateOf(c) == Call.STATE_RINGING) c.reject(false, null) else c.disconnect()
     }

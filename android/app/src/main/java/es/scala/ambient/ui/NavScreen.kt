@@ -182,7 +182,7 @@ fun NavScreen(wide: Boolean) {
 
             AnimatedVisibility(results.isNotEmpty() || searching, enter = fadeIn(), exit = fadeOut()) {
                 Glass(radius = 24.dp, padding = PaddingValues(6.dp)) {
-                    Column(Modifier.verticalScroll(rememberScrollState())) {
+                    Column(Modifier.carDrag().verticalScroll(rememberScrollState())) {
                         if (searching && results.isEmpty()) Text("Buscando…", color = Quiet, fontSize = 15.sp, modifier = Modifier.padding(16.dp))
                         results.forEach { p ->
                             Column(
@@ -211,7 +211,7 @@ fun NavScreen(wide: Boolean) {
         val d = dest
         if (d != null) {
             Glass(
-                Modifier.align(Alignment.BottomStart).padding(16.dp).then(if (wide) Modifier.width(520.dp) else Modifier.fillMaxWidth()),
+                Modifier.align(Alignment.BottomStart).padding(16.dp).then(if (wide) Modifier.width(if (carMode) 400.dp else 520.dp) else Modifier.fillMaxWidth()),
                 radius = 26.dp, padding = PaddingValues(20.dp),
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
@@ -247,10 +247,10 @@ fun NavScreen(wide: Boolean) {
                         }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                        PillButton("Guardar como Casa", icon = Icons.Home, modifier = Modifier.weight(1f)) {
+                        PillButton(if (carMode) "Es mi casa" else "Guardar como Casa", icon = Icons.Home, modifier = Modifier.weight(1f)) {
                             app.prefs.update { it.copy(home = d.copy(name = "Casa")) }
                         }
-                        PillButton("Como Trabajo", icon = Icons.Work, modifier = Modifier.weight(1f)) {
+                        PillButton(if (carMode) "Mi trabajo" else "Como Trabajo", icon = Icons.Work, modifier = Modifier.weight(1f)) {
                             app.prefs.update { it.copy(work = d.copy(name = "Trabajo")) }
                         }
                     }

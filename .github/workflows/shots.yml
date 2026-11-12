@@ -1,0 +1,37 @@
+name: Capturas del coche
+
+on:
+  push:
+    branches: ["shots/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  shots:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Capturas
+        working-directory: android
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          chmod +x gradlew
+          ./gradlew --no-daemon testDebugUnitTest --tests "*CarShots*" > ../gradle.log 2>&1 || true
+          tail -n 150 ../gradle.log
+          cd app/build && zip -qr ../../../shots.zip shots reports/tests test-results 2>/dev/null || true
+          cd ../../.. && zip -q shots.zip gradle.log
+      - name: Publicar capturas
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: shots
+          name: Capturas de prueba
+          prerelease: true
+          body: "Capturas automáticas de la interfaz a tamaño de pantalla de coche."
+          files: shots.zip

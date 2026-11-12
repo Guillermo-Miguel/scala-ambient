@@ -66,7 +66,7 @@ fun MusicScreen(wide: Boolean) {
     Box(Modifier.fillMaxSize()) {
         // la carátula, muy desenfocada, de fondo
         val art = np?.art
-        if (art != null && Build.VERSION.SDK_INT >= 31) {
+        if (art != null && Build.VERSION.SDK_INT >= 31 && !LocalCarMode.current) {
             val img = remember(art) { art.asImageBitmap() }
             Crossfade(img, animationSpec = tween(600), label = "bg") { bmp ->
                 Image(bmp, null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().blur(90.dp, androidx.compose.ui.draw.BlurredEdgeTreatment.Unbounded).alpha(0.35f))
@@ -85,19 +85,19 @@ fun MusicScreen(wide: Boolean) {
 
             if (np == null) {
                 // no suena nada: accesos directos a las apps de música
-                Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) { MusicLauncher(wide) }
+                Column(Modifier.weight(1f).carDrag().verticalScroll(rememberScrollState())) { MusicLauncher(wide) }
             } else if (wide) {
                 Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(36.dp), verticalAlignment = Alignment.CenterVertically) {
                     Crossfade(np?.title to np?.art, animationSpec = tween(400), modifier = Modifier.fillMaxHeight(0.92f).aspectRatio(1f), label = "art") {
                         AlbumArt(np, Modifier.fillMaxSize())
                     }
-                    Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                    Column(Modifier.weight(1f).carDrag().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(24.dp)) {
                         Player(np, sources)
                         if (np?.playing != true) AppRow()
                     }
                 }
             } else {
-                Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                Column(Modifier.weight(1f).carDrag().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(24.dp)) {
                     AlbumArt(np, Modifier.fillMaxWidth().aspectRatio(1f))
                     Player(np, sources)
                     if (np?.playing != true) AppRow()
@@ -133,7 +133,7 @@ private fun Player(np: NowPlaying?, sources: List<String>) {
         if (sources.size > 1) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Label("Fuente")
-                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.carDrag(vertical = false, horizontal = true).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     sources.forEach { pkg ->
                         val on = pkg == np?.packageName
                         val shape = RoundedCornerShape(20.dp)
@@ -253,7 +253,7 @@ fun AppRow(max: Int = 6) {
     if (apps.isEmpty()) return
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Label("Abrir otra app")
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(Modifier.carDrag(vertical = false, horizontal = true).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             apps.take(max).forEach { app -> AppTile(app, Modifier.widthIn(min = 92.dp)) }
         }
     }

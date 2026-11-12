@@ -32,7 +32,12 @@ class MainActivity : ComponentActivity() {
             Manifest.permission.ACCESS_FINE_LOCATION,
             Manifest.permission.ACCESS_COARSE_LOCATION,
         )).distinct().toTypedArray()
-        if (!app.ble.hasPermission() || !app.location.hasPermission()) askPermissions.launch(needed)
+        // Colgar desde el coche: mismo grupo «Teléfono» que llamar, Android lo concede sin volver a preguntar
+        fun has(p: String) = checkSelfPermission(p) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        val phone = if (has(Manifest.permission.CALL_PHONE) && !has(Manifest.permission.ANSWER_PHONE_CALLS))
+            arrayOf(Manifest.permission.ANSWER_PHONE_CALLS) else emptyArray()
+        if (!app.ble.hasPermission() || !app.location.hasPermission()) askPermissions.launch(needed + phone)
+        else if (phone.isNotEmpty()) askPermissions.launch(phone)
 
         handleIntent(intent)
         setContent { AppRoot() }

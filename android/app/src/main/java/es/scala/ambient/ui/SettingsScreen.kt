@@ -71,7 +71,7 @@ fun SettingsScreen(wide: Boolean, onReplayWelcome: () -> Unit) {
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         ScreenHeader("Ajustes")
         Column(
-            Modifier.weight(1f).fillMaxWidth().verticalScroll(rememberScrollState()),
+            Modifier.weight(1f).fillMaxWidth().carDrag().verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Section("Conductor") {
@@ -124,6 +124,22 @@ fun SettingsScreen(wide: Boolean, onReplayWelcome: () -> Unit) {
                     color = Quiet, fontSize = 13.sp, lineHeight = 18.sp,
                 )
                 PillButton("Restablecer (100 %)") { app.prefs.update { it.copy(uiScale = 1f) } }
+            }
+
+            Section("Pantalla del coche") {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.weight(1f)) {
+                        Label("Tamaño en Android Auto")
+                        Text("${(s.carScale * 100).roundToInt()} %", color = Ink, fontSize = 22.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    fun set(v: Float) = app.prefs.update { it.copy(carScale = ((v * 20).roundToInt() / 20f).coerceIn(0.8f, 1.35f)) }
+                    PillButton("−  Más pequeño", enabled = s.carScale > 0.8f) { set(s.carScale - 0.05f) }
+                    PillButton("+  Más grande", enabled = s.carScale < 1.35f) { set(s.carScale + 0.05f) }
+                }
+                Text(
+                    "Cambia el tamaño de todo en la pantalla del coche, al momento. Cuanto más grande, mejor se lee, pero cabe menos y habrá que deslizar más.",
+                    color = Quiet, fontSize = 13.sp, lineHeight = 18.sp,
+                )
             }
 
             Section("Apertura automática") {

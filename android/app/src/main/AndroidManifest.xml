@@ -27,6 +27,8 @@
     <!-- Teléfono: favoritos y llamar -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
     <uses-permission android:name="android.permission.CALL_PHONE" />
+    <!-- Colgar y contestar desde la pantalla del coche (allí las llamadas las lleva Android Auto) -->
+    <uses-permission android:name="android.permission.ANSWER_PHONE_CALLS" />
     <uses-feature android:name="android.hardware.telephony" android:required="false" />
 
     <!-- Llamadas dentro de la app: avisos de llamada entrante -->
@@ -145,7 +147,8 @@
 
         <service
             android:name=".car.AmbientCarAppService"
-            android:exported="true">
+            android:exported="true"
+            android:foregroundServiceType="location">
             <intent-filter>
                 <action android:name="androidx.car.app.CarAppService" />
                 <category android:name="androidx.car.app.category.NAVIGATION" />

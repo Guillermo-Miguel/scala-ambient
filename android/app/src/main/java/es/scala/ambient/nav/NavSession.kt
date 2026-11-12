@@ -75,7 +75,8 @@ object NavSession {
         initTts(app)
         load(dest, route)
         AmbientApp.instance.location.setNavigating(true)
-        ContextCompat.startForegroundService(app, Intent(app, NavService::class.java))
+        // con la app solo en el coche Android puede no dejar arrancarlo: la guía sigue igual
+        runCatching { ContextCompat.startForegroundService(app, Intent(app, NavService::class.java)) }
         locJob?.cancel()
         locJob = scope.launch {
             AmbientApp.instance.location.location.filterNotNull().collect { onLocation(it) }
@@ -89,7 +90,7 @@ object NavSession {
         _state.value = null
         guided = null
         AmbientApp.instance.location.setNavigating(false)
-        context.applicationContext.stopService(Intent(context.applicationContext, NavService::class.java))
+        runCatching { context.applicationContext.stopService(Intent(context.applicationContext, NavService::class.java)) }
         tts?.stop()
         abandonFocus()
     }

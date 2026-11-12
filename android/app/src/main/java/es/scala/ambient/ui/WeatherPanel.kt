@@ -92,7 +92,7 @@ fun WeatherPanel(wide: Boolean, onClose: () -> Unit) {
             }
             if (wide) {
                 Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                    Column(Modifier.weight(1f).fillMaxHeight().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(22.dp)) {
+                    Column(Modifier.weight(1f).fillMaxHeight().carDrag().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(22.dp)) {
                         Now(weather, onClose)
                         Stats(weather, columns = 4)
                         Hours(weather)
@@ -100,7 +100,7 @@ fun WeatherPanel(wide: Boolean, onClose: () -> Unit) {
                     Days(weather.days, Modifier.width(360.dp).fillMaxHeight())
                 }
             } else {
-                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(22.dp)) {
+                Column(Modifier.fillMaxSize().carDrag().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(22.dp)) {
                     Now(weather, onClose)
                     Stats(weather, columns = 2)
                     Hours(weather)
@@ -167,7 +167,7 @@ private fun Stats(w: Weather, columns: Int) {
 private fun Hours(w: Weather) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Label("Próximas horas")
-        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.carDrag(vertical = false, horizontal = true).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             w.hours.forEachIndexed { i, h ->
                 Column(
                     Modifier.width(64.dp).clip(RoundedCornerShape(18.dp))
@@ -191,7 +191,7 @@ private fun Days(days: List<DayWeather>, modifier: Modifier) {
     val lo = days.minOfOrNull { it.minC } ?: 0.0
     val hi = days.maxOfOrNull { it.maxC } ?: 1.0
     val span = (hi - lo).coerceAtLeast(1.0)
-    Column(modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(modifier.carDrag().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Label("Próximos días")
         days.forEachIndexed { i, d ->
             val name = if (i == 0) "Hoy" else runCatching {

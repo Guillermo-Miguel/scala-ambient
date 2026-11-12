@@ -13,6 +13,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -77,11 +78,12 @@ fun HomeScreen(wide: Boolean, onOpen: (Dest) -> Unit) {
         SimpleDateFormat("EEEE, d 'de' MMMM", Locale("es", "ES")).format(now.time).replaceFirstChar { it.uppercase() }
     }
 
+    val car = LocalCarMode.current
     val header = @Composable {
         ScreenHeader(greeting) {
             Column(horizontalAlignment = Alignment.End) {
                 Text(date, color = Quiet, fontSize = 14.sp)
-                Text("${two(h)}:${two(now.get(Calendar.MINUTE))}", color = Ink, fontSize = 40.sp, fontWeight = FontWeight.Light)
+                Text("${two(h)}:${two(now.get(Calendar.MINUTE))}", color = Ink, fontSize = if (car) 32.sp else 40.sp, fontWeight = if (car) FontWeight.Normal else FontWeight.Light)
             }
         }
     }
@@ -90,21 +92,36 @@ fun HomeScreen(wide: Boolean, onOpen: (Dest) -> Unit) {
 
     Box(Modifier.fillMaxSize()) {
     if (wide) {
-        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            header()
-            Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                NavTile(Modifier.weight(1.25f).fillMaxHeight(), onOpen)
-                Column(Modifier.weight(2f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        val gap = if (car) 12.dp else 16.dp
+        val tiles: @Composable (Modifier) -> Unit = { m ->
+            Row(m.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
+                NavTile(Modifier.weight(if (car) 1.05f else 1.25f).fillMaxHeight(), onOpen)
+                Column(Modifier.weight(2f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(gap)) {
                     MediaTile(Modifier.weight(1f).fillMaxWidth(), onOpen)
-                    Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(gap)) {
                         AmbientTile(Modifier.weight(1f).fillMaxHeight(), onOpen)
                         WeatherTile(Modifier.weight(1f).fillMaxHeight()) { weatherOpen = true }
                     }
                 }
             }
         }
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            // si la pantalla es muy baja, las tarjetas conservan un alto mínimo y se desliza
+            val minTiles = 340.dp
+            if (maxHeight >= minTiles + 76.dp) {
+                Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(gap)) {
+                    header()
+                    tiles(Modifier.weight(1f))
+                }
+            } else {
+                Column(Modifier.fillMaxSize().carDrag().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(gap)) {
+                    header()
+                    tiles(Modifier.height(minTiles))
+                }
+            }
+        }
     } else {
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+        Column(Modifier.fillMaxSize().carDrag().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             header()
             MediaTile(Modifier.fillMaxWidth().height(220.dp), onOpen)
             NavTile(Modifier.fillMaxWidth().height(300.dp), onOpen)
@@ -179,12 +196,14 @@ private fun NavTile(modifier: Modifier, onOpen: (Dest) -> Unit) {
         }
 
         val target = dest ?: settings.home ?: settings.recent
+        val narrow = LocalCarMode.current
         Glass(
-            Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(14.dp),
-            radius = 24.dp, padding = PaddingValues(start = 20.dp, end = 14.dp, top = 14.dp, bottom = 14.dp),
+            Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(if (narrow) 10.dp else 14.dp),
+            radius = 24.dp,
+            padding = if (narrow) PaddingValues(14.dp) else PaddingValues(start = 20.dp, end = 14.dp, top = 14.dp, bottom = 14.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
+            val texts: @Composable (Modifier) -> Unit = { m ->
+                Column(m) {
                     Text(target?.name ?: "¿A dónde vamos?", color = Ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     val sub = when {
                         target == null -> "Toca para buscar un destino"
@@ -196,17 +215,27 @@ private fun NavTile(modifier: Modifier, onOpen: (Dest) -> Unit) {
                         }
                         else -> err ?: ""
                     }
-                    Text(sub, color = Quiet, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(sub, color = Quiet, fontSize = 14.sp, maxLines = if (narrow) 2 else 1, overflow = TextOverflow.Ellipsis)
                 }
-                Spacer(Modifier.width(12.dp))
+            }
+            val button: @Composable (Modifier) -> Unit = { m ->
                 when {
-                    target == null -> PillButton("Buscar", icon = Icons.Search) { onOpen(Dest.NAV) }
-                    dest == null -> PillButton("Ir", primary = true) { NavModel.choose(target) }
-                    else -> PillButton("Iniciar", primary = true, enabled = settings.navApp != NavApp.INTERNAL || route != null) {
+                    target == null -> PillButton("Buscar", m, icon = Icons.Search) { onOpen(Dest.NAV) }
+                    dest == null -> PillButton("Ir", m, primary = true) { NavModel.choose(target) }
+                    else -> PillButton("Iniciar", m, primary = true, enabled = settings.navApp != NavApp.INTERNAL || route != null) {
                         if (settings.navApp == NavApp.INTERNAL) {
                             route?.let { NavSession.start(context, target, it); onOpen(Dest.NAV) }
                         } else Net.startNavigation(context, settings.navApp, target.lat, target.lon)
                     }
+                }
+            }
+            if (narrow) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { texts(Modifier.fillMaxWidth()); button(Modifier.fillMaxWidth()) }
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    texts(Modifier.weight(1f))
+                    Spacer(Modifier.width(12.dp))
+                    button(Modifier)
                 }
             }
         }
@@ -220,8 +249,9 @@ private fun MediaTile(modifier: Modifier, onOpen: (Dest) -> Unit) {
     val np by media.now.collectAsState()
     val access by media.hasAccess.collectAsState()
     val context = LocalContext.current
+    val car = LocalCarMode.current
 
-    Glass(modifier, onClick = { onOpen(Dest.MUSIC) }) {
+    Glass(modifier, onClick = { onOpen(Dest.MUSIC) }, padding = PaddingValues(if (car) 14.dp else 22.dp)) {
         if (!access) {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Label("Música")
@@ -254,9 +284,9 @@ private fun MediaTile(modifier: Modifier, onOpen: (Dest) -> Unit) {
             }
             return@Glass
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(20.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxSize()) {
+        Row(horizontalArrangement = Arrangement.spacedBy(if (car) 14.dp else 20.dp), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxSize()) {
             AlbumArt(np, Modifier.fillMaxHeight().aspectRatio(1f))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(if (car) 8.dp else 12.dp)) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                     Label(when { np == null -> "Nada sonando"; np!!.playing -> "Reproduciendo · ${np!!.appName}"; else -> "En pausa · ${np!!.appName}" })
                     Text(np?.title?.ifBlank { null } ?: "Pon música en el móvil", color = Ink, fontSize = 22.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -265,7 +295,7 @@ private fun MediaTile(modifier: Modifier, onOpen: (Dest) -> Unit) {
                 ProgressLine(np)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     RoundIcon(Icons.Prev, "Anterior", enabled = np?.canSkipPrev == true) { media.previous() }
-                    RoundIcon(if (np?.playing == true) Icons.Pause else Icons.Play, if (np?.playing == true) "Pausar" else "Reproducir", size = 58, filled = true, enabled = np != null) { media.playPause() }
+                    RoundIcon(if (np?.playing == true) Icons.Pause else Icons.Play, if (np?.playing == true) "Pausar" else "Reproducir", size = if (car) 52 else 58, filled = true, enabled = np != null) { media.playPause() }
                     RoundIcon(Icons.Next, "Siguiente", enabled = np?.canSkipNext == true) { media.next() }
                 }
             }
@@ -336,7 +366,7 @@ private fun AmbientTile(modifier: Modifier, onOpen: (Dest) -> Unit) {
 @Composable
 private fun WeatherTile(modifier: Modifier, onExpand: () -> Unit) {
     val w by NavModel.weather.collectAsState()
-    Glass(modifier, onClick = onExpand) {
+    Glass(modifier, onClick = onExpand, padding = PaddingValues(if (LocalCarMode.current) 14.dp else 22.dp)) {
         Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Label(w?.place ?: "Exterior", Modifier.weight(1f))
@@ -350,7 +380,7 @@ private fun WeatherTile(modifier: Modifier, onExpand: () -> Unit) {
                 }
             }
             if (w != null) {
-                Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(if (LocalCarMode.current) 8.dp else 14.dp)) {
                     MiniStat(Icons.Drop, "${w!!.rainProbNow} %")
                     MiniStat(Icons.Wind, "${w!!.windKmh.roundToInt()} km/h")
                     MiniStat(Icons.Humidity, "${w!!.humidity} %")

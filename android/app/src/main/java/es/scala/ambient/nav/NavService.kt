@@ -43,13 +43,14 @@ class NavService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val type = if (Build.VERSION.SDK_INT >= 29) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0
-        ServiceCompat.startForeground(this, ID, build(NavSession.state.value), type)
+        val ok = runCatching { ServiceCompat.startForeground(this, ID, build(NavSession.state.value), type) }.isSuccess
+        if (!ok) { stopSelf(); return START_NOT_STICKY }
         if (collecting) return START_NOT_STICKY
         collecting = true
         scope.launch {
             NavSession.state.collect { st ->
                 if (st == null) { stopSelf(); return@collect }
-                getSystemService(NotificationManager::class.java).notify(ID, build(st))
+                runCatching { getSystemService(NotificationManager::class.java).notify(ID, build(st)) }
             }
         }
         return START_NOT_STICKY

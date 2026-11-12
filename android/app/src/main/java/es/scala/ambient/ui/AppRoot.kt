@@ -78,11 +78,11 @@ enum class Dest(val label: String, val icon: ImageVector) {
 }
 
 @Composable
-fun AppRoot(carMode: Boolean = false) {
+fun AppRoot(carMode: Boolean = false, start: Dest = Dest.HOME) {
     val app = AmbientApp.instance
     val settings by app.prefs.settings.collectAsState()
     val ambient by app.ble.state.collectAsState()
-    var dest by rememberSaveable { mutableStateOf(Dest.HOME) }
+    var dest by rememberSaveable { mutableStateOf(start) }
     var welcomeDone by rememberSaveable { mutableStateOf(!settings.showWelcome) }
 
     LaunchedEffect(Unit) { NavModel.refreshWeather() }
@@ -105,11 +105,6 @@ fun AppRoot(carMode: Boolean = false) {
         onDispose { activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
     }
     val dialRequest by CallManager.dialRequest.collectAsState()
-    // botón «Inicio» de la barra de Android Auto
-    if (carMode) {
-        val homeTaps by es.scala.ambient.car.CarBus.home.collectAsState()
-        LaunchedEffect(homeTaps) { if (homeTaps > 0) dest = Dest.HOME }
-    }
     LaunchedEffect(dialRequest) { if (dialRequest != null) { dest = Dest.PHONE; welcomeDone = true } }
 
     // Reflejo de la luz ambiente detrás del cristal
@@ -117,7 +112,8 @@ fun AppRoot(carMode: Boolean = false) {
     val doorColor by animateColorAsState(ambient.zone(Zone.FL).rgb.rgb(), tween(900), label = "bgB")
     val glow by animateFloatAsState(if (ambient.on) 1f else 0f, tween(900), label = "bgOn")
 
-    ScaledUi(settings.uiScale) {
+    CompositionLocalProvider(LocalCarMode provides carMode) {
+    ScaledUi(if (carMode) settings.carScale else settings.uiScale, car = carMode) {
         Box(Modifier.fillMaxSize().background(Ground)) {
             // Reflejo de la luz: degradados suaves a pantalla completa (sin bordes ni recortes)
             Box(
@@ -147,7 +143,7 @@ fun AppRoot(carMode: Boolean = false) {
                 }
             )
 
-            BoxWithConstraints(Modifier.fillMaxSize().systemBarsPadding().padding(16.dp)) {
+            BoxWithConstraints(Modifier.fillMaxSize().systemBarsPadding().padding(if (carMode) 10.dp else 16.dp)) {
                 // horizontal (coche, tablet) → menú lateral; vertical (móvil) → barra abajo
             val wide = carMode || maxWidth > maxHeight || maxWidth >= 720.dp
                 val content: @Composable (Modifier) -> Unit = { m ->
@@ -168,8 +164,8 @@ fun AppRoot(carMode: Boolean = false) {
                     }
                 }
                 if (wide) {
-                    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(18.dp)) {
-                        Rail(dest, vertical = true, modifier = Modifier.width(76.dp).fillMaxHeight()) { dest = it }
+                    Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(if (carMode) 12.dp else 18.dp)) {
+                        Rail(dest, vertical = true, modifier = Modifier.width(if (carMode) 66.dp else 76.dp).fillMaxHeight()) { dest = it }
                         content(Modifier.weight(1f).fillMaxHeight())
                     }
                 } else {
@@ -190,6 +186,7 @@ fun AppRoot(carMode: Boolean = false) {
             }
         }
     }
+    }
 }
 
 @Composable
@@ -200,14 +197,19 @@ private fun Rail(current: Dest, vertical: Boolean, modifier: Modifier, onPick: (
         contentAlignment = Alignment.Center,
     ) {
         if (vertical) {
-            Column(
-                Modifier.fillMaxHeight().padding(vertical = 14.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                Dest.entries.forEach { d ->
-                    if (d == Dest.SETTINGS) Spacer(Modifier.weight(1f))
-                    RailButton(d, d == current) { onPick(d) }
+            BoxWithConstraints(Modifier.fillMaxHeight()) {
+                // en pantallas bajas los botones se encogen para que quepan los seis
+                val n = Dest.entries.size
+                val size = ((maxHeight - 20.dp) / n - 6.dp).coerceIn(36.dp, 52.dp)
+                Column(
+                    Modifier.fillMaxHeight().padding(vertical = 10.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Dest.entries.forEach { d ->
+                        if (d == Dest.SETTINGS) Spacer(Modifier.weight(1f))
+                        RailButton(d, d == current, size) { onPick(d) }
+                    }
                 }
             }
         } else {
@@ -223,11 +225,11 @@ private fun Rail(current: Dest, vertical: Boolean, modifier: Modifier, onPick: (
 }
 
 @Composable
-private fun RailButton(d: Dest, active: Boolean, onClick: () -> Unit) {
+private fun RailButton(d: Dest, active: Boolean, size: androidx.compose.ui.unit.Dp = 52.dp, onClick: () -> Unit) {
     val bg by animateColorAsState(if (active) Color.White.copy(alpha = 0.12f) else Color.Transparent, tween(300), label = "rail")
     val fg by animateColorAsState(if (active) Ink else Quiet, tween(300), label = "railfg")
     Box(
-        Modifier.size(52.dp).clip(RoundedCornerShape(18.dp)).background(bg)
+        Modifier.size(size).clip(RoundedCornerShape(18.dp)).background(bg)
             .clickable(role = Role.Tab) { onClick() }
             .semantics { contentDescription = d.label; selected = active },
         contentAlignment = Alignment.Center,
@@ -246,17 +248,28 @@ private fun RailButton(d: Dest, active: Boolean, onClick: () -> Unit) {
  * una de 10" o una tablet, más grande. `userScale` es el ajuste fino de Ajustes.
  */
 @Composable
-fun ScaledUi(userScale: Float, content: @Composable () -> Unit) {
+fun ScaledUi(userScale: Float, car: Boolean = false, content: @Composable () -> Unit) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val base = LocalDensity.current
-        val landscape = maxWidth > maxHeight
-        val fit = if (landscape) minOf(maxWidth / 1200.dp, maxHeight / 660.dp)
-        else minOf(maxWidth / 420.dp, maxHeight / 860.dp)
-        val s = (fit.coerceIn(0.6f, 1.3f) * userScale).coerceIn(0.5f, 1.5f)
-        val scaled = Density(base.density * s, base.fontScale.coerceIn(0.85f, 1.15f))
+        val scaled = if (car) {
+            // En el coche se mira desde más lejos y los «dp» que da Android Auto no son fiables:
+            // se calcula sobre los píxeles reales para que la pantalla equivalga a unos 820 × 460,
+            // con todo bastante más grande que en el móvil.
+            val fit = minOf(constraints.maxWidth / CAR_W, constraints.maxHeight / CAR_H)
+            Density((fit * userScale.coerceIn(0.7f, 1.5f)).coerceAtLeast(0.3f), 1f)
+        } else {
+            val landscape = maxWidth > maxHeight
+            val fit = if (landscape) minOf(maxWidth / 1200.dp, maxHeight / 660.dp)
+            else minOf(maxWidth / 420.dp, maxHeight / 860.dp)
+            val s = (fit.coerceIn(0.6f, 1.3f) * userScale).coerceIn(0.5f, 1.5f)
+            Density(base.density * s, base.fontScale.coerceIn(0.85f, 1.15f))
+        }
         CompositionLocalProvider(LocalDensity provides scaled) { content() }
     }
 }
+
+private const val CAR_W = 820f
+private const val CAR_H = 460f
 
 /** Última orientación con la que usabas la app (fuera de llamadas). */
 private object LastOrientation {

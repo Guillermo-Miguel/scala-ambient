@@ -36,13 +36,14 @@ import java.util.Calendar
 /** Cabecera de cada pantalla: logo + título, y algo a la derecha. */
 @Composable
 fun ScreenHeader(title: String, modifier: Modifier = Modifier, trailing: @Composable () -> Unit = {}) {
-    Row(modifier.fillMaxWidth().padding(start = 6.dp, end = 4.dp, top = 4.dp), verticalAlignment = Alignment.Bottom) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    val car = LocalCarMode.current
+    Row(modifier.fillMaxWidth().padding(start = 6.dp, end = 4.dp, top = if (car) 2.dp else 4.dp), verticalAlignment = Alignment.Bottom) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(if (car) 5.dp else 10.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 BrandLogo(13.dp)
                 LightMark()
             }
-            Text(title, color = Ink, style = TextStyle(fontSize = 32.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.6).sp))
+            Text(title, color = Ink, maxLines = 1, overflow = TextOverflow.Ellipsis, style = TextStyle(fontSize = if (car) 26.sp else 32.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.6).sp))
         }
         trailing()
     }

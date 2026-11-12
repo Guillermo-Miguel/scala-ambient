@@ -1,6 +1,7 @@
 package es.scala.ambient.ui
 
 import android.view.Gravity
+import androidx.compose.foundation.background
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -171,6 +172,11 @@ private fun apply(h: MapHandle) {
 
 @Composable
 fun OsmMap(scene: MapScene, interactive: Boolean, modifier: Modifier = Modifier) {
+    // vista previa / capturas de prueba: sin mapa real
+    if (androidx.compose.ui.platform.LocalInspectionMode.current) {
+        androidx.compose.foundation.layout.Box(modifier.background(androidx.compose.ui.graphics.Color(0xFF14161A)))
+        return
+    }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     val handle = remember { MapHandle() }
     val here by AmbientApp.instance.location.location.collectAsState()
@@ -203,11 +209,13 @@ fun OsmMap(scene: MapScene, interactive: Boolean, modifier: Modifier = Modifier)
     }
 
     AndroidView(
-        modifier = modifier,
+        modifier = if (interactive) modifier.carDrag(vertical = true, horizontal = true) else modifier,
         factory = { ctx ->
             MapView(ctx).also { mv ->
                 handle.view = mv
                 mv.onCreate(null)
+                // en el coche la imagen se envía a 30 fps: dibujar más solo gasta batería y calienta el móvil
+                if (carMode) runCatching { mv.setMaximumFps(30) }
                 mv.onStart()
                 mv.onResume()
                 mv.getMapAsync { map ->

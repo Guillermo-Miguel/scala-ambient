@@ -128,7 +128,7 @@ fun PhoneScreen(wide: Boolean) {
                     }
                     PillButton("Activar", primary = true) {
                         if (Build.VERSION.SDK_INT >= 33) askNotif.launch(Manifest.permission.POST_NOTIFICATIONS)
-                        if (!canRead) ask.launch(arrayOf(Manifest.permission.READ_CONTACTS, Manifest.permission.CALL_PHONE))
+                        if (!canRead) ask.launch(arrayOf(Manifest.permission.READ_CONTACTS, Manifest.permission.CALL_PHONE, Manifest.permission.ANSWER_PHONE_CALLS))
                         CallManager.requestDefaultDialerIntent(context)?.let { askRole.launch(it) }
                     }
                 }
@@ -143,12 +143,13 @@ fun PhoneScreen(wide: Boolean) {
                         !canRead -> Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                             Text("Muestra tus contactos favoritos para llamar con un toque.", color = Quiet, fontSize = 15.sp)
                             PillButton("Permitir contactos y llamadas", primary = true) {
-                                ask.launch(arrayOf(Manifest.permission.READ_CONTACTS, Manifest.permission.CALL_PHONE))
+                                ask.launch(arrayOf(Manifest.permission.READ_CONTACTS, Manifest.permission.CALL_PHONE, Manifest.permission.ANSWER_PHONE_CALLS))
                             }
                         }
                         favorites == null -> Text("Cargando…", color = Quiet, fontSize = 15.sp)
                         favorites!!.isEmpty() -> Text("No tienes favoritos. Marca contactos con la estrella en la app de Contactos.", color = Quiet, fontSize = 15.sp)
                         else -> LazyVerticalGrid(
+                            modifier = Modifier.carDrag(),
                             columns = GridCells.Adaptive(120.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),
@@ -192,7 +193,7 @@ private fun FavoriteCard(f: Favorite, onCall: () -> Unit) {
 private fun Dialer(number: String, onChange: (String) -> Unit, onCall: () -> Unit) {
     val keys = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#")
     Column(
-        Modifier.verticalScroll(rememberScrollState()),
+        Modifier.carDrag().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Row(Modifier.fillMaxWidth().height(52.dp), verticalAlignment = Alignment.CenterVertically) {
