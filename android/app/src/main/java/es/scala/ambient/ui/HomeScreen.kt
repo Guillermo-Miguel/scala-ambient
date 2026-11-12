@@ -107,7 +107,7 @@ fun HomeScreen(wide: Boolean, onOpen: (Dest) -> Unit) {
         }
         BoxWithConstraints(Modifier.fillMaxSize()) {
             // si la pantalla es muy baja, las tarjetas conservan un alto mínimo y se desliza
-            val minTiles = 340.dp
+            val minTiles = 312.dp
             if (maxHeight >= minTiles + 76.dp) {
                 Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(gap)) {
                     header()
@@ -204,7 +204,7 @@ private fun NavTile(modifier: Modifier, onOpen: (Dest) -> Unit) {
         ) {
             val texts: @Composable (Modifier) -> Unit = { m ->
                 Column(m) {
-                    Text(target?.name ?: "¿A dónde vamos?", color = Ink, fontSize = 20.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    Text(target?.name ?: "¿A dónde vamos?", color = Ink, fontSize = if (narrow) 18.sp else 20.sp, fontWeight = FontWeight.SemiBold, maxLines = if (narrow) 2 else 1, overflow = TextOverflow.Ellipsis, lineHeight = 22.sp)
                     val sub = when {
                         target == null -> "Toca para buscar un destino"
                         dest == null -> "Toca Ir para calcular la ruta"
@@ -335,6 +335,37 @@ private fun AmbientTile(modifier: Modifier, onOpen: (Dest) -> Unit) {
     val ble = AmbientApp.instance.ble
     val st by ble.state.collectAsState()
     val link by ble.link.collectAsState()
+    if (LocalCarMode.current) {
+        // en el coche: el título arriba a todo lo ancho, y debajo el coche con el estado
+        Glass(modifier, onClick = { onOpen(Dest.LIGHT) }, padding = PaddingValues(14.dp)) {
+            Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Label("Luz ambiente", Modifier.weight(1f))
+                    Icon(Icons.Chevron, null, tint = Quiet, modifier = Modifier.size(18.dp))
+                }
+                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    CarTopView(
+                        colors = Zone.entries.map { st.zone(it).rgb.rgb() },
+                        levels = Zone.entries.map { if (st.on) st.zone(it).bright / 100f else 0f },
+                        selected = emptySet(), onTap = null,
+                        modifier = Modifier.fillMaxHeight(),
+                    )
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text(
+                            if (!st.on) "Apagada" else st.scene?.label ?: "Personalizado",
+                            color = Ink, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 20.sp,
+                        )
+                        if (st.on) Text("${st.effect.label} · ${st.zone(Zone.DASH).bright} %", color = Quiet, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(
+                            if (link == es.scala.ambient.Link.CONNECTED) "Conectada" else "Sin centralita",
+                            color = Faint, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        }
+        return
+    }
     Glass(modifier, onClick = { onOpen(Dest.LIGHT) }, padding = PaddingValues(start = 14.dp, end = 18.dp, top = 14.dp, bottom = 14.dp)) {
         Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalAlignment = Alignment.CenterVertically) {
             // el coche con sus luces, en pequeño
@@ -383,7 +414,7 @@ private fun WeatherTile(modifier: Modifier, onExpand: () -> Unit) {
                 Row(horizontalArrangement = Arrangement.spacedBy(if (LocalCarMode.current) 8.dp else 14.dp)) {
                     MiniStat(Icons.Drop, "${w!!.rainProbNow} %")
                     MiniStat(Icons.Wind, "${w!!.windKmh.roundToInt()} km/h")
-                    MiniStat(Icons.Humidity, "${w!!.humidity} %")
+                    if (!LocalCarMode.current) MiniStat(Icons.Humidity, "${w!!.humidity} %")
                 }
             }
         }

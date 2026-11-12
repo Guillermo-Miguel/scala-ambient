@@ -80,7 +80,7 @@ fun AmbientScreen(wide: Boolean) {
 
     val trailing = @Composable {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(if (state.on) "Encendida" else "Apagada", color = Ink, fontSize = 15.sp, modifier = Modifier.padding(end = 10.dp))
+            if (!LocalCarMode.current) Text(if (state.on) "Encendida" else "Apagada", color = Ink, fontSize = 15.sp, modifier = Modifier.padding(end = 10.dp))
             Switch(
                 checked = state.on,
                 onCheckedChange = { ble.send(Cmd.power(it)) },
@@ -95,7 +95,7 @@ fun AmbientScreen(wide: Boolean) {
                 ScreenHeader("Luz ambiente", trailing = trailing)
                 Text(link.label, color = if (link == Link.CONNECTED) Ink else RedText, fontSize = 13.sp, modifier = Modifier.padding(start = 6.dp, top = 4.dp))
                 Cabin(state, group, { group = it }, Modifier.weight(1f).fillMaxWidth().padding(vertical = 12.dp))
-                Label("Toca el salpicadero o una puerta para editarla", Modifier.padding(start = 6.dp))
+                Label(if (LocalCarMode.current) "Toca una zona para editarla" else "Toca el salpicadero o una puerta para editarla", Modifier.padding(start = 6.dp))
             }
             // en el coche el panel ocupa algo más de la mitad, y todo él se desliza
             val car = LocalCarMode.current

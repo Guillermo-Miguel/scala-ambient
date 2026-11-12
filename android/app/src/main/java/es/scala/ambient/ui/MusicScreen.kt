@@ -87,8 +87,9 @@ fun MusicScreen(wide: Boolean) {
                 // no suena nada: accesos directos a las apps de música
                 Column(Modifier.weight(1f).carDrag().verticalScroll(rememberScrollState())) { MusicLauncher(wide) }
             } else if (wide) {
-                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(36.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Crossfade(np?.title to np?.art, animationSpec = tween(400), modifier = Modifier.fillMaxHeight(0.92f).aspectRatio(1f), label = "art") {
+                val car = LocalCarMode.current
+                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(if (car) 22.dp else 36.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Crossfade(np?.title to np?.art, animationSpec = tween(400), modifier = Modifier.fillMaxHeight(if (car) 0.78f else 0.92f).aspectRatio(1f), label = "art") {
                         AlbumArt(np, Modifier.fillMaxSize())
                     }
                     Column(Modifier.weight(1f).carDrag().verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(24.dp)) {
@@ -110,10 +111,11 @@ fun MusicScreen(wide: Boolean) {
 @Composable
 private fun Player(np: NowPlaying?, sources: List<String>) {
     val media = AmbientApp.instance.media
-    Column(verticalArrangement = Arrangement.spacedBy(22.dp)) {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    val car = LocalCarMode.current
+    Column(verticalArrangement = Arrangement.spacedBy(if (car) 14.dp else 22.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(if (car) 3.dp else 6.dp)) {
             Label(if (np == null) "Nada sonando" else if (np.playing) "Reproduciendo" else "En pausa")
-            Text(np?.title?.ifBlank { null } ?: "Pon música en el móvil", color = Ink, fontSize = 34.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = 38.sp)
+            Text(np?.title?.ifBlank { null } ?: "Pon música en el móvil", color = Ink, fontSize = if (car) 26.sp else 34.sp, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis, lineHeight = if (car) 30.sp else 38.sp)
             Text(np?.artist ?: "", color = Quiet, fontSize = 19.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (!np?.album.isNullOrBlank()) Text(np!!.album, color = Faint, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
@@ -121,13 +123,13 @@ private fun Player(np: NowPlaying?, sources: List<String>) {
         SeekBar(np)
 
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(22.dp)) {
-            RoundIcon(Icons.Prev, "Anterior", size = 60, enabled = np?.canSkipPrev == true) { media.previous() }
+            RoundIcon(Icons.Prev, "Anterior", size = if (car) 54 else 60, enabled = np?.canSkipPrev == true) { media.previous() }
             RoundIcon(
                 if (np?.playing == true) Icons.Pause else Icons.Play,
                 if (np?.playing == true) "Pausar" else "Reproducir",
-                size = 80, filled = true, enabled = np != null,
+                size = if (car) 68 else 80, filled = true, enabled = np != null,
             ) { media.playPause() }
-            RoundIcon(Icons.Next, "Siguiente", size = 60, enabled = np?.canSkipNext == true) { media.next() }
+            RoundIcon(Icons.Next, "Siguiente", size = if (car) 54 else 60, enabled = np?.canSkipNext == true) { media.next() }
         }
 
         if (sources.size > 1) {

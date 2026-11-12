@@ -37,10 +37,22 @@ class CarShots {
     @Test @Config(qualifiers = "w800dp-h480dp-land-mdpi") fun phone() = shot("800_phone", Dest.PHONE)
     @Test @Config(qualifiers = "w800dp-h480dp-land-mdpi") fun light() = shot("800_light", Dest.LIGHT)
     @Test @Config(qualifiers = "w800dp-h480dp-land-mdpi") fun settings() = shot("800_settings", Dest.SETTINGS)
-    @Test @Config(qualifiers = "w800dp-h480dp-land-mdpi") fun homeBig() = shot("800_home_120", Dest.HOME, 1.2f)
-    @Test @Config(qualifiers = "w800dp-h480dp-land-mdpi") fun lightBig() = shot("800_light_120", Dest.LIGHT, 1.2f)
+    @Test @Config(qualifiers = "w800dp-h480dp-land-mdpi") fun homeBig() = shot("800_home_115", Dest.HOME, 1.15f)
+    @Test @Config(qualifiers = "w800dp-h480dp-land-mdpi") fun lightBig() = shot("800_light_115", Dest.LIGHT, 1.15f)
+    @Test @Config(qualifiers = "w800dp-h480dp-land-mdpi") fun homeSmall() = shot("800_home_085", Dest.HOME, 0.85f)
     @Test @Config(qualifiers = "w1280dp-h720dp-land-mdpi") fun homeHd() = shot("1280_home", Dest.HOME)
     @Test @Config(qualifiers = "w1280dp-h720dp-land-mdpi") fun lightHd() = shot("1280_light", Dest.LIGHT)
+
+    @Test @Config(qualifiers = "w800dp-h480dp-land-mdpi")
+    fun ringing() {
+        captureRoboImage("build/shots/800_ringing.png") {
+            CompositionLocalProvider(LocalInspectionMode provides true, LocalCarMode provides true) {
+                ScaledUi(1f, car = true) {
+                    CallScreen(CallUi("", "Llamada entrante", CallPhase.RINGING, true, 0L, false, false, external = true))
+                }
+            }
+        }
+    }
 
     @Test @Config(qualifiers = "w800dp-h480dp-land-mdpi")
     fun call() {

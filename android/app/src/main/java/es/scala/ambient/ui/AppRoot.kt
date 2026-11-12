@@ -253,7 +253,7 @@ fun ScaledUi(userScale: Float, car: Boolean = false, content: @Composable () -> 
         val base = LocalDensity.current
         val scaled = if (car) {
             // En el coche se mira desde más lejos y los «dp» que da Android Auto no son fiables:
-            // se calcula sobre los píxeles reales para que la pantalla equivalga a unos 820 × 460,
+            // se calcula sobre los píxeles reales para que la pantalla equivalga a unos 720 × 420,
             // con todo bastante más grande que en el móvil.
             val fit = minOf(constraints.maxWidth / CAR_W, constraints.maxHeight / CAR_H)
             Density((fit * userScale.coerceIn(0.7f, 1.5f)).coerceAtLeast(0.3f), 1f)
@@ -268,8 +268,8 @@ fun ScaledUi(userScale: Float, car: Boolean = false, content: @Composable () -> 
     }
 }
 
-private const val CAR_W = 820f
-private const val CAR_H = 460f
+private const val CAR_W = 720f
+private const val CAR_H = 420f
 
 /** Última orientación con la que usabas la app (fuera de llamadas). */
 private object LastOrientation {

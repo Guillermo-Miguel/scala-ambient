@@ -17,6 +17,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -116,7 +117,9 @@ fun PhoneScreen(wide: Boolean) {
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         ScreenHeader("Teléfono")
 
-        if (!isDialer) {
+        val car = LocalCarMode.current
+        // en el coche las llamadas las lleva Android Auto: este aviso solo tiene sentido en el móvil
+        if (!isDialer && !car) {
             Glass(Modifier.fillMaxWidth()) {
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -136,7 +139,7 @@ fun PhoneScreen(wide: Boolean) {
         }
 
         val favs: @Composable (Modifier) -> Unit = { m ->
-            Glass(m) {
+            Glass(m, padding = PaddingValues(if (car) 14.dp else 22.dp)) {
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                     Label("Favoritos")
                     when {
@@ -164,7 +167,10 @@ fun PhoneScreen(wide: Boolean) {
         if (wide) {
             Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 favs(Modifier.weight(1f).fillMaxHeight())
-                Glass(Modifier.width(380.dp).fillMaxHeight()) { Dialer(number, { number = it }) { call(context, number) } }
+                Glass(
+                    (if (car) Modifier.weight(1f) else Modifier.width(380.dp)).fillMaxHeight(),
+                    padding = PaddingValues(if (car) 14.dp else 22.dp),
+                ) { Dialer(number, { number = it }) { call(context, number) } }
             }
         } else {
             Glass(Modifier.fillMaxWidth()) { Dialer(number, { number = it }) { call(context, number) } }
@@ -192,6 +198,35 @@ private fun FavoriteCard(f: Favorite, onCall: () -> Unit) {
 @Composable
 private fun Dialer(number: String, onChange: (String) -> Unit, onCall: () -> Unit) {
     val keys = listOf("1", "2", "3", "4", "5", "6", "7", "8", "9", "*", "0", "#")
+    if (LocalCarMode.current) {
+        // en el coche: teclas anchas que ocupan todo el panel, sin tener que deslizar
+        Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth().height(40.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    number.ifEmpty { "Marcar número" }, color = if (number.isEmpty()) Faint else Ink,
+                    fontSize = 24.sp, maxLines = 1, modifier = Modifier.weight(1f), textAlign = TextAlign.Center,
+                )
+                if (number.isNotEmpty()) RoundIcon(Icons.Backspace, "Borrar", size = 40) { onChange(number.dropLast(1)) }
+            }
+            keys.chunked(3).forEach { row ->
+                Row(Modifier.weight(1f).fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    row.forEach { k ->
+                        Box(
+                            Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(14.dp)).background(Color.White.copy(alpha = 0.07f))
+                                .clickable(role = Role.Button, onClickLabel = k) { if (number.length < 20) onChange(number + k) },
+                            contentAlignment = Alignment.Center,
+                        ) { Text(k, color = Ink, fontSize = 24.sp) }
+                    }
+                }
+            }
+            Box(
+                Modifier.weight(1.1f).fillMaxWidth().clip(RoundedCornerShape(16.dp)).background(if (number.isEmpty()) Color.White.copy(alpha = 0.08f) else Red)
+                    .clickable(enabled = number.isNotEmpty(), role = Role.Button, onClickLabel = "Llamar", onClick = onCall),
+                contentAlignment = Alignment.Center,
+            ) { Icon(Icons.Phone, "Llamar", tint = Color.White, modifier = Modifier.size(24.dp)) }
+        }
+        return
+    }
     Column(
         Modifier.carDrag().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp), horizontalAlignment = Alignment.CenterHorizontally,

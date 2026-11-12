@@ -141,7 +141,7 @@ fun BoxScope.GuidanceOverlay(
     // ---- maniobra (arriba a la izquierda) ----
     val banner = RoundedCornerShape(26.dp)
     Column(
-        Modifier.align(Alignment.TopStart).padding(14.dp).then(if (wide) Modifier.width(440.dp) else Modifier.fillMaxWidth())
+        Modifier.align(Alignment.TopStart).padding(14.dp).then(if (wide) Modifier.width(if (LocalCarMode.current) 380.dp else 440.dp) else Modifier.fillMaxWidth())
             .clip(banner).background(Color(0xF0101012)).border(1.dp, GlassEdge, banner),
     ) {
         AnimatedContent(

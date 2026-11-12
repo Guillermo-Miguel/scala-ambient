@@ -91,9 +91,9 @@ fun Segmented(labels: List<String>, selected: Int, modifier: Modifier = Modifier
             val fg by animateColorAsState(if (on) Ground else Quiet, tween(320), label = "segfg")
             Box(
                 Modifier.weight(1f, fill = false).height(44.dp).clip(RoundedCornerShape(20.dp)).background(bg)
-                    .clickable(role = Role.Button) { onPick(i) }.padding(horizontal = 18.dp),
+                    .clickable(role = Role.Button) { onPick(i) }.padding(horizontal = if (LocalCarMode.current) 10.dp else 18.dp),
                 contentAlignment = Alignment.Center,
-            ) { Text(l, color = fg, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1) }
+            ) { Text(l, color = fg, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, softWrap = false) }
         }
     }
 }
