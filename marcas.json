@@ -1,0 +1,5 @@
+{
+  "marcas": [
+    { "id": "skoda", "nombre": "Škoda", "archivo": "skoda.png", "monocromo": true }
+  ]
+}
