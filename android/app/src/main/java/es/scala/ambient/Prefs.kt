@@ -34,6 +34,11 @@ data class Settings(
     val carBluetooth: PairedDevice? = null,
     /** Abrir la app al encender el dispositivo. */
     val openOnBoot: Boolean = false,
+    /** Marca de arranque: "ambient" o "halo" (propias) o "c:<id>" (descargada de la comunidad). */
+    val brand: String = Brands.AMBIENT,
+    val brandName: String = "",
+    /** El logotipo descargado es de un solo color y se tiñe con el color de la interfaz. */
+    val brandMono: Boolean = true,
 )
 
 /** Ajustes guardados en el móvil. */
@@ -52,6 +57,9 @@ class Prefs(context: Context) {
             .getOrDefault(NavApp.INTERNAL),
         showWelcome = sp.getBoolean("welcome", true),
         glassBlur = sp.getBoolean("blur", true),
+        brand = sp.getString("brand", Brands.AMBIENT) ?: Brands.AMBIENT,
+        brandName = sp.getString("brandName", "") ?: "",
+        brandMono = sp.getBoolean("brandMono", true),
         uiScale = sp.getFloat("uiScale", 1f),
         carScale = sp.getFloat("carScale", 1f),
         carBluetooth = sp.getString("carBtAddr", null)?.let { PairedDevice(sp.getString("carBtName", it) ?: it, it) },
@@ -68,6 +76,9 @@ class Prefs(context: Context) {
             .putString("navApp2", s.navApp.name)
             .putBoolean("welcome", s.showWelcome)
             .putBoolean("blur", s.glassBlur)
+            .putString("brand", s.brand)
+            .putString("brandName", s.brandName)
+            .putBoolean("brandMono", s.brandMono)
             .putFloat("uiScale", s.uiScale)
             .putFloat("carScale", s.carScale)
             .putString("carBtAddr", s.carBluetooth?.address)

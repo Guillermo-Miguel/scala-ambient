@@ -25,6 +25,7 @@ class AmbientApp : Application() {
         prefs = Prefs(this)
         media = MediaRepo(this)
         location = LocationRepo(this)
+        Brands.init(this, prefs.settings.value)
 
         // Mapa: MapLibre (vectorial, sin clave)
         try { MapLibre.getInstance(this) } catch (_: Throwable) { }

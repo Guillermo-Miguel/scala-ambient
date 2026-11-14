@@ -24,7 +24,7 @@ import androidx.compose.ui.semantics.semantics
 import es.scala.ambient.Zone
 
 /**
- * Škoda Scala visto desde arriba, sin techo, a escala real:
+ * Coche compacto de cinco puertas visto desde arriba, sin techo, a escala real:
  * 4.362 × 1.793 mm, batalla 2.649 mm. Unidades de dibujo: 260 × 560.
  */
 private object Car {

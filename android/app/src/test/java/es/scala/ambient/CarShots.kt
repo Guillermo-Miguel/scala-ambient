@@ -5,7 +5,21 @@ import androidx.compose.ui.platform.LocalInspectionMode
 import com.github.takahirom.roborazzi.captureRoboImage
 import es.scala.ambient.telecom.CallPhase
 import es.scala.ambient.telecom.CallUi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import es.scala.ambient.ui.AppRoot
+import es.scala.ambient.ui.BrandSection
+import es.scala.ambient.ui.BuiltInLogo
+import es.scala.ambient.ui.CommunityBrands
+import es.scala.ambient.ui.Glass
+import es.scala.ambient.ui.Ground
 import es.scala.ambient.ui.CallScreen
 import es.scala.ambient.ui.Dest
 import es.scala.ambient.ui.LocalCarMode
@@ -42,6 +56,39 @@ class CarShots {
     @Test @Config(qualifiers = "w800dp-h480dp-land-mdpi") fun homeSmall() = shot("800_home_085", Dest.HOME, 0.85f)
     @Test @Config(qualifiers = "w1280dp-h720dp-land-mdpi") fun homeHd() = shot("1280_home", Dest.HOME)
     @Test @Config(qualifiers = "w1280dp-h720dp-land-mdpi") fun lightHd() = shot("1280_light", Dest.LIGHT)
+
+    @Test @Config(qualifiers = "w800dp-h480dp-land-mdpi")
+    fun brands() {
+        captureRoboImage("build/shots/800_brands.png") {
+            CompositionLocalProvider(LocalInspectionMode provides true, LocalCarMode provides true) {
+                ScaledUi(1f, car = true) {
+                    Column(
+                        Modifier.fillMaxSize().background(Ground).padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                    ) {
+                        BuiltInLogo(Brands.AMBIENT, 13.dp)
+                        BuiltInLogo(Brands.HALO, 13.dp)
+                        BuiltInLogo(Brands.AMBIENT, 40.dp)
+                        BuiltInLogo(Brands.HALO, 40.dp)
+                        Glass(Modifier.fillMaxWidth()) {
+                            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) { BrandSection { } }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    @Test @Config(qualifiers = "w800dp-h480dp-land-mdpi")
+    fun community() {
+        captureRoboImage("build/shots/800_community.png") {
+            CompositionLocalProvider(LocalInspectionMode provides true, LocalCarMode provides true) {
+                ScaledUi(1f, car = true) {
+                    Box(Modifier.fillMaxSize().background(Ground).padding(12.dp)) { CommunityBrands { } }
+                }
+            }
+        }
+    }
 
     @Test @Config(qualifiers = "w800dp-h480dp-land-mdpi")
     fun ringing() {

@@ -1,5 +1,13 @@
 package es.scala.ambient.ui
 
+import androidx.compose.foundation.Canvas
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
+import es.scala.ambient.AmbientApp
+import es.scala.ambient.Brands
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
@@ -98,15 +106,98 @@ fun Segmented(labels: List<String>, selected: Int, modifier: Modifier = Modifier
     }
 }
 
-/** Tu logotipo, en blanco. */
+/**
+ * Marca de arranque elegida en Ajustes: uno de los dos logotipos propios de la app,
+ * o uno descargado de la comunidad (la app no lleva dentro ninguna marca ajena).
+ */
 @Composable
 fun BrandLogo(height: Dp, modifier: Modifier = Modifier, tint: Color = Ink) {
-    Image(
-        painter = painterResource(R.drawable.logo_skoda),
-        contentDescription = "Škoda",
-        colorFilter = ColorFilter.tint(tint),
-        modifier = modifier.height(height).aspectRatio(1008f / 148f),
-    )
+    val settings by AmbientApp.instance.prefs.settings.collectAsState()
+    val custom by Brands.custom.collectAsState()
+    val image = custom
+    when {
+        Brands.isCommunity(settings.brand) && image != null -> Image(
+            bitmap = image,
+            contentDescription = settings.brandName,
+            colorFilter = if (settings.brandMono) ColorFilter.tint(tint) else null,
+            modifier = modifier.height(height).aspectRatio((image.width.toFloat() / image.height).coerceIn(0.5f, 12f)),
+        )
+        settings.brand == Brands.HALO -> BuiltInLogo(Brands.HALO, height, modifier, tint)
+        else -> BuiltInLogo(Brands.AMBIENT, height, modifier, tint)
+    }
+}
+
+// ---------- Logotipos propios, dibujados a trazo ----------
+// Cada letra son líneas en una caja de alto 1; se dibujan con trazo redondo del mismo grosor.
+
+private class Glyph(val width: Float, val closed: Boolean = false, vararg val lines: FloatArray)
+
+private fun g(width: Float, vararg lines: FloatArray) = Glyph(width, false, *lines)
+
+private val LETTER_A = g(0.92f, floatArrayOf(0f, 1f, 0.46f, 0f, 0.92f, 1f))
+private val LETTER_M = g(1.04f, floatArrayOf(0f, 1f, 0f, 0f, 0.52f, 0.64f, 1.04f, 0f, 1.04f, 1f))
+private val LETTER_B = g(
+    0.8f,
+    floatArrayOf(0f, 1f, 0f, 0f, 0.54f, 0f, 0.74f, 0.13f, 0.74f, 0.37f, 0.54f, 0.5f, 0f, 0.5f),
+    floatArrayOf(0.54f, 0.5f, 0.8f, 0.63f, 0.8f, 0.87f, 0.6f, 1f, 0f, 1f),
+)
+private val LETTER_I = g(0f, floatArrayOf(0f, 0f, 0f, 1f))
+private val LETTER_E = g(0.7f, floatArrayOf(0f, 0f, 0.7f, 0f), floatArrayOf(0f, 0.5f, 0.7f, 0.5f), floatArrayOf(0f, 1f, 0.7f, 1f))
+private val LETTER_N = g(0.86f, floatArrayOf(0f, 1f, 0f, 0f, 0.86f, 1f, 0.86f, 0f))
+private val LETTER_T = g(0.84f, floatArrayOf(0f, 0f, 0.84f, 0f), floatArrayOf(0.42f, 0f, 0.42f, 1f))
+private val LETTER_H = g(0.82f, floatArrayOf(0f, 0f, 0f, 1f), floatArrayOf(0.82f, 0f, 0.82f, 1f), floatArrayOf(0f, 0.5f, 0.82f, 0.5f))
+private val LETTER_L = g(0.66f, floatArrayOf(0f, 0f, 0f, 1f, 0.66f, 1f))
+private val LETTER_O = Glyph(
+    0.96f, true,
+    floatArrayOf(0.22f, 0f, 0.74f, 0f, 0.96f, 0.22f, 0.96f, 0.78f, 0.74f, 1f, 0.22f, 1f, 0f, 0.78f, 0f, 0.22f),
+)
+
+private val WORD_AMBIENT = listOf(LETTER_A, LETTER_M, LETTER_B, LETTER_I, LETTER_E, LETTER_N, LETTER_T)
+private val WORD_HALO = listOf(LETTER_H, LETTER_A, LETTER_L, LETTER_O)
+private const val LOGO_STROKE = 0.15f
+private const val LOGO_GAP = 0.5f
+private const val HALO_EMBLEM = 1.55f   // ancho del emblema + separación, en altos de letra
+
+private fun wordWidth(word: List<Glyph>) = word.sumOf { it.width.toDouble() }.toFloat() + LOGO_GAP * (word.size - 1)
+
+/** Ancho ÷ alto de cada logotipo propio. */
+fun builtInLogoAspect(id: String): Float {
+    val inner = 1f - LOGO_STROKE
+    return if (id == Brands.HALO) (HALO_EMBLEM + wordWidth(WORD_HALO)) * inner + LOGO_STROKE
+    else wordWidth(WORD_AMBIENT) * inner + LOGO_STROKE
+}
+
+/** Logotipos inventados para la app: «AMBIENT» (solo letras) y «HALO» (aro de luz + letras). */
+@Composable
+fun BuiltInLogo(id: String, height: Dp, modifier: Modifier = Modifier, tint: Color = Ink) {
+    val halo = id == Brands.HALO
+    Canvas(modifier.height(height).aspectRatio(builtInLogoAspect(id))) {
+        val stroke = size.height * LOGO_STROKE
+        val s = size.height - stroke          // alto útil de las letras
+        val top = stroke / 2f
+        var x = stroke / 2f
+        val style = Stroke(stroke, cap = StrokeCap.Round, join = StrokeJoin.Round)
+
+        if (halo) {
+            // aro abierto con un punto de luz: el «halo»
+            val r = s / 2f
+            val c = Offset(x + r, top + r)
+            drawArc(tint, startAngle = -50f, sweepAngle = 290f, useCenter = false, topLeft = Offset(c.x - r, c.y - r), size = Size(s, s), style = style)
+            drawCircle(Red, radius = stroke * 0.95f, center = Offset(c.x + r * 0.94f, c.y - r * 0.94f * 0.36f))
+            x += HALO_EMBLEM * s
+        }
+        val path = Path()
+        (if (halo) WORD_HALO else WORD_AMBIENT).forEach { glyph ->
+            glyph.lines.forEach { pts ->
+                path.moveTo(x + pts[0] * s, top + pts[1] * s)
+                var i = 2
+                while (i < pts.size) { path.lineTo(x + pts[i] * s, top + pts[i + 1] * s); i += 2 }
+                if (glyph.closed) path.close()
+            }
+            x += (glyph.width + LOGO_GAP) * s
+        }
+        drawPath(path, tint, style = style)
+    }
 }
 
 /** Marca del sistema: línea de luz + punto rojo. */

@@ -33,6 +33,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -67,6 +68,12 @@ fun SettingsScreen(wide: Boolean, onReplayWelcome: () -> Unit) {
     fun appSettings() = context.startActivity(
         Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + context.packageName)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     )
+
+    var community by rememberSaveable { mutableStateOf(false) }
+    if (community) {
+        CommunityBrands { community = false }
+        return
+    }
 
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         ScreenHeader("Ajustes")
@@ -105,6 +112,8 @@ fun SettingsScreen(wide: Boolean, onReplayWelcome: () -> Unit) {
                     )
                 }
             }
+
+            Section("Marca de arranque") { BrandSection { community = true } }
 
             Section("Pantalla") {
                 Row(verticalAlignment = Alignment.Bottom) {
