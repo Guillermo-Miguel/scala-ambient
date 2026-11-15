@@ -3,6 +3,8 @@ on:
   workflow_dispatch:
   push:
     branches: [main, calma-launcher]
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -22,3 +24,10 @@ jobs:
         with:
           name: calma-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+      - name: Publicar APK en Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk Calma.apk
+          gh release delete calma-apk --cleanup-tag --yes || true
+          gh release create calma-apk Calma.apk --target "$GITHUB_SHA" --title "Calma (APK)" --notes "APK de prueba del launcher Calma."
