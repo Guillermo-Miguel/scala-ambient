@@ -1,5 +1,6 @@
 {
   "marcas": [
-    { "id": "skoda", "nombre": "Škoda", "archivo": "skoda.png", "monocromo": true }
-  ]
+    { "id": "skoda", "nombre": "Škoda", "archivo": "skoda.png", "monocromo": true },
+    { "id": "mercedes", "nombre": "Mercedes-Benz", "archivo": "mercedes.png", "monocromo": true }
+]
 }
